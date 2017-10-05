@@ -1,0 +1,24 @@
+.idea/
+# Maven
+target
+
+# Eclipse
+.metadata
+.checkstyle
+.classpath
+.pmd
+.project
+.ruleset
+.settings
+.pydevproject
+bin
+*.log
+*.log.[0-9]*
+
+# IntelliJ IDEA
+*.i??
+.idea
+!*.ico
+**/out
+**/classes
+

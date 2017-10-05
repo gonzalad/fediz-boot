@@ -1,0 +1,159 @@
+= Specifications
+
+== Objectives
+
+ . Easier setup +
+   Spring Boot allows simple app development. +
+   Dev should be able to use Fediz with Spring Boot:
+   .. Dev should be able to start Fediz server by
+   using a single annotation,i.e. @EnableAuthorizationServer. +
+   This will start the OIDC Server with a default configuration.
+   .. Most basic features should be able to be configured in application.properties.
+   .. More advanced configuration should be achieved programatically (i.e.
+   similar to how a dev would configuration Spring Security WebSecurityConfigurerAdapter, i.e.
+   https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#jc-httpsecurity)
+ . Simpler architecture +
+   Let the dev choose, based on his needs :
+   .. Simple OIDC Server (no STS, no IDP)
+   .. OIDC Server + STS Server
+   .. Full Fediz Server (OIDC + IDP + STS)
+ . More flexible architecture +
+   Allow the dev to choose remote or embedded STS and IDP.
+ . Flexible UI +
+   Fediz should come with a default UI, but the user should be able to customize it
+   easily :
+   .. Using the same technology (i.e. override a single page).
+   .. Using a different technology (i.e. create a SPA app). In this case, endpoints
+   handling UI interaction must be clearly defined and easily overidable.
+
+
+== Fediz 2.x features not related to Spring Boot
+
+I'm listing them here (just not to forget) :
+
+ . MongoDb store for OIDC Server. +
+   Use Mongo db native feature for handling expiration.
+
+
+== How to configure OIDC Authorization Server
+
+public class AuthorizationServerConfig extends AuthorizationServerConfigurationAdapter {
+
+	public void config(AuthorizationServerConfigurer authorizationServer) {
+		// by defaut:
+		// - discovery is enabled (and will provide all enabled endpoints)
+
+		// customisation possibility :
+		// - OAuthDataProvider (what's the default impl ?)
+		authorizationServer
+			.basePath("/oidc")
+			.cxf()
+			    .bus(yyy)
+			.and()
+			.oauthDataProvider().custom(authDataProvider()
+			.and()
+			.tokenService()
+            .and()
+            .logout() -> TODO conf
+            .and().
+            .console() -> TODO conf (allow customisation)
+            .and()
+            .jwk() -> TODO conf, and do we need jwk conf ? yes : ie from localStore, from spring (spring has keystore configuration)
+                        or cxf or explicit.
+            .and()
+            .userInfo() -> TODO conf ?
+
+        // TODO do we want to allow user to override endpoint uri mapping ?
+
+        // basePath: will allow to have multiple servers (OIDC, STS, etc... in the same app)
+        // -> pb CXF boot plugin creates a single /services
+        //      perhaps we must not use the plugin and create ourselves the CXF bus ?
+        // cxf: is it necessary : would allow to use a custom cxf bus
+
+		// Configuring tokenService - 0
+        // Minimal configuration (provides authorization_code and refresh grantTypes and don't support public clients)
+		authorizationServer
+
+		// Configuring tokenService - 1
+		authorizationServer
+            .tokenService()
+                // if this method is provided, then grantHandlers are automatically configured
+                // to support these grants (see list in https://tools.ietf.org/html/rfc7591)
+                .grantHandlers("refresh", "password", "authorization_code", "implicit", "client_credentials")
+                // if this method is called, then it's the responsibility of the caller to configure all needed grant
+                // handers programmatically
+                .grantHandlers(XXX)
+                .supportPublicClients(true/false)
+                .responseFilters(xxx)
+
+		// Configuring tokenService - 2
+			.tokenService().custom(new XXXX)
+
+		// Configuring oauthDataProvider - 0
+		// Minimal conf (which scopes ?) -> used from app configuration with default values if non provided
+		authorizationServer
+
+		// Configuring oauthDataProvider - 1
+		// Use and customize default oauthDataProvider
+		// Possibility to ser supported scopes (should get i18n message from spring)
+		authorizationServer
+			.oauthDataProvider().custom(authDataProvider()
+
+		// Configuring oauthDataProvider - 2
+		// Use and customize default oauthDataProvider
+		// Possibility to ser supported scopes (should get i18n message from spring)
+		authorizationServer
+			.oauthDataProvider()
+			.supportedScopes("openid", "email", "profile", "roles", "refreshToken")
+			.defaultScopes("openid")
+			.invisibleToClientScopes("refreshToken")
+			// also we could add this in spring configuration
+			.accessTokenLifetime(xxxx)
+			.codeLifetime(xxxx)
+			.refreshTokenLifetime(xxxx)
+			.recycleRefreshToken(true)
+			.useJwkFormatForAccessTokens(true)
+			.and()
+
+	}
+
+    public OAuthDataProvider oauthDataProvider() {
+        OAuthDataProviderImpl oauthDataProvider = new OAuthDataProviderImpl();
+        oauthDataProvider.setSupportedScopes(supportedScopes());
+        oauthDataProvider.setDefaultScopes(defaultScopes());
+        oauthDataProvider.setInvisibleToClientScopes(invisibleToClientScopes());
+        return oauthDataProvider;
+    }
+}
+
+
+See HttpSecurity and AbstractConfiguredSecurityBuilder for how complex configurers work.
+
+
+== Bridging OIDC Authorization Server with Spring Security
+
+Result :
+
+ * disable authorization/authentication access on some authorization server endpoints.
+    i.e. users accessing <oidc>/idp/authorize need to be authenticated
+ * OIDC user authorization endpoint should trigger authentication on a given (and unique ?) filterChain.
+
+Questions:
+ * do we need to set AuthorizationServerConfigurationAdapter in the same class as the SecurityConfiguration ? +
+   a. If yes, merge both (aka extend SecurityConfiguration and add a new method ?) +
+   b. If no (aka we can have a single authorizationServerConfigurationAdapter on multiple
+    SecurityConfigurations (aka spring security filterChains with different authenticationManagers), then
+    create a @EnableXXX annotation and add those annotations on each ServerConfigurationAdapter.
+
+I think it's a.
+
+
+== Customising the UI Layer
+
+We need to allow devs to:
+a - not require any archetype usage.
+b - be flexible to allow users to change the UI and even use another UI technology (aka SPA)
+
+For a we must bundle default UIs in fediz-boot jars.
+
+Do we get rid of Jsp and use Spring MVC for AuthorizationService ?
