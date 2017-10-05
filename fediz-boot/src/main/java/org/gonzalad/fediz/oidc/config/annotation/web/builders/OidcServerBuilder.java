@@ -2,18 +2,26 @@ package org.gonzalad.fediz.oidc.config.annotation.web.builders;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.cxf.Bus;
 import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
+import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
+import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
+import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
+import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
+import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
 import org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler;
 import org.apache.cxf.rs.security.oauth2.provider.AccessTokenGrantHandler;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthDataProvider;
+import org.apache.cxf.rs.security.oauth2.provider.OAuthJSONProvider;
 import org.apache.cxf.rs.security.oauth2.provider.SubjectCreator;
 import org.apache.cxf.rs.security.oauth2.services.AccessTokenService;
 import org.apache.cxf.rs.security.oauth2.services.AuthorizationService;
@@ -73,18 +81,52 @@ public class OidcServerBuilder {
 
     private Map<String, String> supportedClaims;
 
-    public OidcServerBuilder(ServerProperties serverProperties) {
+    private OAuth2EndpointBuilder oAuth2EndpointBuilder = new OAuth2EndpointBuilder();
+
+    private JwkEndpointBuilder jwkEndpointBuilder = new JwkEndpointBuilder();
+
+    private IdpEndpointBuilder idpEndpointBuilder = new IdpEndpointBuilder();
+
+    private DiscoveryEndpointBuilder discoveryEndpointBuilder = new DiscoveryEndpointBuilder();
+
+    private CxfBuilder cxfBuilder = new CxfBuilder();
+
+    public OidcServerBuilder(ServerProperties serverProperties, Bus bus) {
         if (serverProperties == null) {
             throw new IllegalArgumentException("Parameter serverProperties is required");
         }
         this.oauthDataProvider = Defaults.authDataProvider(serverProperties);
         this.grants = Defaults.grants();
         this.scopesRequiringNoConsent = Defaults.scopesRequiringNoConsent();
+        this.cxfBuilder.bus = bus;
     }
 
     public CxfBuilder cxf() {
         // be cautious : handle reentrancy...
-        return new CxfBuilder();
+        return cxfBuilder;
+    }
+
+    public OAuth2EndpointBuilder oauth2() {
+        // be cautious : handle reentrancy...
+        return oAuth2EndpointBuilder;
+    }
+
+    public IdpEndpointBuilder idp() {
+        // be cautious : handle reentrancy...
+        return idpEndpointBuilder;
+    }
+
+    public JwkEndpointBuilder jwk() {
+        // be cautious : handle reentrancy...
+        return this.jwkEndpointBuilder;
+    }
+
+    public DiscoveryEndpointBuilder discovery() {
+        return discoveryEndpointBuilder;
+    }
+
+    private PrivateKeyPasswordProvider buildPrivateKeyPasswordProvider() {
+        return new PrivateKeyPasswordProviderImpl();
     }
 
     public OidcServerBuilder endpoint(JAXRSServerFactoryBean endpoint) {
@@ -92,32 +134,95 @@ public class OidcServerBuilder {
         return this;
     }
 
+    public OidcServerBuilder issuer(String issuer) {
+        OidcServerBuilder.this.issuer = issuer;
+        return this;
+    }
+
     public OidcServer build() {
         OidcServer oidcServer = new OidcServer();
+        oidcServer.setBus(cxfBuilder.bus);
         oidcServer.setAuthDataProvider(oauthDataProvider);
-        oidcServer.setTokenEndpoint(buildTokenEndpoint());
-        oidcServer.setIntrospectionEndpoint(buildIntrospectionEndpoint());
-        //oidcServer.setTokenRevocationEndpoint(buildRevocationEndpoint());
-        //oidcServer.setDiscoveryEndpoint(oauthDataProvider);
-        oidcServer.setAuthorizationEndpoint(buildAuthorizationEndpoint());
+        oidcServer.setOAuth2Endpoint(buildOAuth2Endpoint());
         oidcServer.setDiscoveryEndpoint(buildDiscoveryEndpoint());
 //        oidcServer.setLogoutEndpoint(buildLogoutEndpoint());
         oidcServer.setJwkEndpoint(buildJwkEndpoint());
         oidcServer.setUserInfoEndpoint(buildUserInfoEndpoint());
+        oidcServer.setIdpEndpoint(buildIdpEndpoint());
 //        oidcServer.setDynamicClientRegistrationEndpoint(oauthDataProvider);
 //        oidcServer.setUserConsole(oauthDataProvider);
 //        oidcServer.setAdditionalEndpoints(endpoints);
         return oidcServer;
     }
 
-    private UserInfoService buildUserInfoEndpoint() {
+    private JAXRSServerFactoryBean buildIdpEndpoint() {
+        Map<String, Object> defaultProperties = new HashMap<>();
+        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
+        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        // TODO handle viewProvider endpoint and bundle default resources inside jar (i.e use Spring Boot here ?)
+        List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider());
+        List<Object> services = new ArrayList<>();
+        Optional.ofNullable(buildAuthorizationService()).ifPresent(it -> services.add(it));
+        // TODO logout
+        return buildEndpoint(idpEndpointBuilder, services, defaultProperties, defaultProviders);
+    }
+
+    private JAXRSServerFactoryBean buildOAuth2Endpoint() {
+        Map<String, Object> defaultProperties = new HashMap<>();
+        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
+        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider());
+        List<Object> services = new ArrayList<>();
+        Optional.ofNullable(buildTokenService()).ifPresent(it -> services.add(it));
+        Optional.ofNullable(buildIntrospectionEndpoint()).ifPresent(it -> services.add(it));
+        return buildEndpoint(oAuth2EndpointBuilder, services, defaultProperties, defaultProviders);
+    }
+
+    private JAXRSServerFactoryBean buildDiscoveryEndpoint() {
+        Map<String, Object> defaultProperties = new HashMap<>();
+        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
+        return buildEndpoint(discoveryEndpointBuilder, buildDiscoveryService(), defaultProperties, Collections.emptyList());
+    }
+
+    private Object buildOAuthJsonProvider() {
+        return new OAuthJSONProvider();
+    }
+
+    public OAuthDataProviderBuilder oauthDataProvider() {
+        return new OAuthDataProviderBuilder();
+    }
+
+    // Should only be used from our Configuration
+    public List<JAXRSServerFactoryBean> getEndpoints() {
+        return endpoints;
+    }
+
+    // Should only be used from our Configuration
+    public OAuthDataProvider getAuthDataProvider() {
+        return oauthDataProvider;
+    }
+
+    private JAXRSServerFactoryBean buildUserInfoEndpoint() {
+        EndpointBuilder endpointBuilder = new EndpointBuilder<>();
+        endpointBuilder.address("/users");
+        Map<String, Object> defaultProperties = new HashMap<>();
+        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
+        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonMapObjectProvider());
+        UserInfoService userInfoService = new UserInfoService();
+        userInfoService.setOauthDataProvider(oauthDataProvider);
+        userInfoService.setJwsRequired(false);
+        return buildEndpoint(endpointBuilder, userInfoService, defaultProperties, defaultProviders);
+    }
+
+    private UserInfoService buildUserInfoService() {
         UserInfoService userInfoService = new UserInfoService();
         userInfoService.setOauthDataProvider(oauthDataProvider);
         userInfoService.setJwsRequired(false);
         return userInfoService;
     }
 
-    private AuthorizationService buildAuthorizationEndpoint() {
+    private AuthorizationService buildAuthorizationService() {
         if (authorizationService != null) {
             return authorizationService;
         }
@@ -148,12 +253,49 @@ public class OidcServerBuilder {
         return authorizationService;
     }
 
-    private OidcKeysService buildJwkEndpoint() {
+    private JAXRSServerFactoryBean buildJwkEndpoint() {
+        Map<String, Object> defaultProperties = new HashMap<>();
+        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
+        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonWebKeysProvider());
+        return buildEndpoint(jwkEndpointBuilder, new OidcKeysService(), defaultProperties, defaultProviders);
+    }
+
+    private CrossOriginResourceSharingFilter corsFilter() {
+        CrossOriginResourceSharingFilter corsFilter = new CrossOriginResourceSharingFilter();
+        corsFilter.setAllowHeaders(Arrays.asList("Authorization"));
+        return corsFilter;
+    }
+
+    private JAXRSServerFactoryBean buildEndpoint(EndpointBuilder endpointBuilder, Object service,
+                                                 Map<String, Object> defaultProperties,
+                                                 List<Object> defaultProviders) {
+        return buildEndpoint(endpointBuilder, Arrays.asList(service), defaultProperties, defaultProviders);
+    }
+
+    private JAXRSServerFactoryBean buildEndpoint(EndpointBuilder endpointBuilder, List<Object> services,
+                                                 Map<String, Object> defaultProperties,
+                                                 List<Object> defaultProviders) {
+        if (services == null || services.size() == 0) {
+            return null;
+        }
+        Map<String, Object> properties = endpointBuilder.properties != null ? endpointBuilder.properties : defaultProperties;
+        List<Object> providers = endpointBuilder.providers != null ? endpointBuilder.providers : defaultProviders;
+        JAXRSServerFactoryBean endpoint = new JAXRSServerFactoryBean();
+        endpoint.setAddress(endpointBuilder.address);
+        endpoint.setServiceBeans(services);
+        endpoint.setBus(cxfBuilder.bus);
+        endpoint.setProperties(properties);
+        endpoint.setProviders(providers);
+        return endpoint;
+    }
+
+    private OidcKeysService buildJwkService() {
         OidcKeysService jwkService = new OidcKeysService();
         return jwkService;
     }
 
-    private OidcConfigurationService buildDiscoveryEndpoint() {
+    private OidcConfigurationService buildDiscoveryService() {
         return new OidcConfigurationService();
     }
 
@@ -180,7 +322,7 @@ public class OidcServerBuilder {
         return introspectionService;
     }
 
-    private AccessTokenService buildTokenEndpoint() {
+    private AccessTokenService buildTokenService() {
         if (accessTokenService != null) {
             return accessTokenService;
         }
@@ -195,20 +337,6 @@ public class OidcServerBuilder {
         }
         accessTokenService.setGrantHandlers(grantHandlers);
         return accessTokenService;
-    }
-
-    public OAuthDataProviderBuilder oauthDataProvider() {
-        return new OAuthDataProviderBuilder();
-    }
-
-    // Should only be used from our Configuration
-    public List<JAXRSServerFactoryBean> getEndpoints() {
-        return endpoints;
-    }
-
-    // Should only be used from our Configuration
-    public OAuthDataProvider getAuthDataProvider() {
-        return oauthDataProvider;
     }
 
     private static class Defaults {
@@ -253,6 +381,102 @@ public class OidcServerBuilder {
         }
     }
 
+    public static class EndpointBuilder<B, O extends EndpointBuilder<B, O>> {
+        String address;
+        List<? extends Object> providers;
+        Map<String, Object> properties;
+
+        public O address(String address) {
+            this.address = address;
+            return getSelf();
+        }
+
+        public O properties(Map<String, Object> properties) {
+            this.properties = properties;
+            return getSelf();
+        }
+
+        public O providers(List<? extends Object> providers) {
+            this.providers = providers;
+            return getSelf();
+        }
+
+        private O getSelf() {
+            return (O) this;
+        }
+    }
+
+    public class JwkEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
+
+        public JwkEndpointBuilder() {
+            super.address = "/jwk";
+        }
+    }
+
+    public class DiscoveryEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
+
+        public DiscoveryEndpointBuilder() {
+            super.address = "/.well-known";
+        }
+    }
+
+    public class OAuth2EndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
+
+        public OAuth2EndpointBuilder() {
+            super.address = "/oauth2";
+        }
+
+        public class TokenServiceBuilder {
+
+            public TokenServiceBuilder custom(
+                    AccessTokenService accessTokenService) {
+                OidcServerBuilder.this.accessTokenService = accessTokenService;
+                return this;
+            }
+
+            public TokenServiceBuilder grantHandlers(String... grantHandlers) {
+                List<String> grants = new ArrayList<String>(Arrays.asList(grantHandlers));
+                List<String> invalidGrants = grants.stream().filter(it -> !ACCEPTED_GRANTS.contains(it)).collect(Collectors.toList());
+                if (invalidGrants.size() > 0) {
+                    throw new IllegalArgumentException(String.format("The following grants are not supported by fediz %s", invalidGrants));
+                }
+                OidcServerBuilder.this.grants = grants;
+                return this;
+            }
+
+            //... add the other builder methods in a similar way
+
+            private OAuthDataProviderImpl castToImpl(String callingMethodName) {
+                if (!(OidcServerBuilder.this.oauthDataProvider instanceof OAuthDataProviderImpl)) {
+                    throw new IllegalStateException(String.format("Calling %s on a custom OAuthDataProvider is fobidden", callingMethodName));
+                }
+                return (OAuthDataProviderImpl) OidcServerBuilder.this.oauthDataProvider;
+            }
+
+            public OAuth2EndpointBuilder and() {
+                return OAuth2EndpointBuilder.this;
+            }
+        }
+
+        public class TokenIntrospectionBuilder {
+
+            public TokenIntrospectionBuilder custom(
+                    TokenIntrospectionService tokenIntrospectionService) {
+                OidcServerBuilder.this.tokenIntrospectionService = tokenIntrospectionService;
+                return this;
+            }
+
+            public TokenIntrospectionBuilder disable() {
+                OidcServerBuilder.this.tokenIntrospectionDisabled = true;
+                return this;
+            }
+
+            public OAuth2EndpointBuilder and() {
+                return OAuth2EndpointBuilder.this;
+            }
+        }
+    }
+
     public class OAuthDataProviderBuilder {
 
         public OAuthDataProviderBuilder custom(
@@ -282,76 +506,42 @@ public class OidcServerBuilder {
         }
     }
 
-    public class AuthorizationCodeBuilder {
+    public class IdpEndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
 
-        public AuthorizationCodeBuilder scopesRequiringNoConsent(String... scopesRequiringNoConsent) {
-            OidcServerBuilder.this.scopesRequiringNoConsent = new ArrayList<String>(Arrays.asList(scopesRequiringNoConsent));
-            return this;
+        public IdpEndpointBuilder() {
+            super.address = "/idp";
         }
 
-        public AuthorizationCodeBuilder skipAuthorizationWithOidcScope(boolean skip) {
-            OidcServerBuilder.this.skipAuthorizationWithOidcScope = skip;
-            return this;
+        public IdpEndpointBuilder and() {
+            return IdpEndpointBuilder.this;
         }
 
-        public AuthorizationCodeBuilder issuer(String issuer) {
-            OidcServerBuilder.this.issuer = issuer;
-            return this;
+        public AuthorizationCodeBuilder authorizationCode() {
+            return new AuthorizationCodeBuilder();
         }
 
-        public AuthorizationCodeBuilder supportedClaims(Map<String, String> supportedClaims) {
-            OidcServerBuilder.this.supportedClaims = supportedClaims;
-            return this;
-        }
-    }
+        // TODO add logoutBuilder...
 
-    public class TokenIntrospectionBuilder {
+        public class AuthorizationCodeBuilder {
 
-        public TokenIntrospectionBuilder custom(
-                TokenIntrospectionService tokenIntrospectionService) {
-            OidcServerBuilder.this.tokenIntrospectionService = tokenIntrospectionService;
-            return this;
-        }
-
-        public TokenIntrospectionBuilder disable() {
-            OidcServerBuilder.this.tokenIntrospectionDisabled = true;
-            return this;
-        }
-
-        public OidcServerBuilder and() {
-            return OidcServerBuilder.this;
-        }
-    }
-
-    public class TokenServiceBuilder {
-
-        public TokenServiceBuilder custom(
-                AccessTokenService accessTokenService) {
-            OidcServerBuilder.this.accessTokenService = accessTokenService;
-            return this;
-        }
-
-        public TokenServiceBuilder grantHandlers(String... grantHandlers) {
-            List<String> grants = new ArrayList<String>(Arrays.asList(grantHandlers));
-            List<String> invalidGrants = grants.stream().filter(it -> !ACCEPTED_GRANTS.contains(it)).collect(Collectors.toList());
-            if (invalidGrants.size() > 0) {
-                throw new IllegalArgumentException(String.format("The following grants are not supported by fediz %s", invalidGrants));
+            public AuthorizationCodeBuilder scopesRequiringNoConsent(String... scopesRequiringNoConsent) {
+                OidcServerBuilder.this.scopesRequiringNoConsent = new ArrayList<String>(Arrays.asList(scopesRequiringNoConsent));
+                return this;
             }
-            OidcServerBuilder.this.grants = grants;
-            return this;
-        }
 
-        //... add the other builder methods in a similar way
-
-        private OAuthDataProviderImpl castToImpl(String callingMethodName) {
-            if (!(OidcServerBuilder.this.oauthDataProvider instanceof OAuthDataProviderImpl)) {
-                throw new IllegalStateException(String.format("Calling %s on a custom OAuthDataProvider is fobidden", callingMethodName));
+            public AuthorizationCodeBuilder skipAuthorizationWithOidcScope(boolean skip) {
+                OidcServerBuilder.this.skipAuthorizationWithOidcScope = skip;
+                return this;
             }
-            return (OAuthDataProviderImpl) OidcServerBuilder.this.oauthDataProvider;
-        }
 
-        public OidcServerBuilder and() {
-            return OidcServerBuilder.this;
+            public AuthorizationCodeBuilder supportedClaims(Map<String, String> supportedClaims) {
+                OidcServerBuilder.this.supportedClaims = supportedClaims;
+                return this;
+            }
+
+            public IdpEndpointBuilder and() {
+                return IdpEndpointBuilder.this;
+            }
         }
     }
 

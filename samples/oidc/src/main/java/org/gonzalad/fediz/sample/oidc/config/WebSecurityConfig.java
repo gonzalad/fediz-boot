@@ -1,20 +1,22 @@
 package org.gonzalad.fediz.sample.oidc.config;
 
+import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
+import org.gonzalad.fediz.oidc.config.annotation.web.configuration.AuthorizationServerConfigurerAdapter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 
 /**
  * @author agonzalez
  */
 @Configuration
 @EnableWebSecurity
-public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+public class WebSecurityConfig extends AuthorizationServerConfigurerAdapter {
+
     @Override
-    protected void configure(HttpSecurity http) throws Exception {
+    public void configure(HttpSecurity http) throws Exception {
         http
                 .authorizeRequests()
                 .antMatchers("/", "/home").permitAll()
@@ -26,6 +28,11 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .and()
                 .logout()
                 .permitAll();
+    }
+
+    @Override
+    public void configure(OidcServerBuilder authorizationServer) throws Exception {
+        authorizationServer.issuer("http://localhost:8080");
     }
 
     @Autowired

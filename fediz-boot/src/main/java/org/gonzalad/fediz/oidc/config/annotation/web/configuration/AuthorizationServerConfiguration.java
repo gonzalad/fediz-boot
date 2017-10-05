@@ -3,6 +3,8 @@ package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.cxf.Bus;
+import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServer;
 import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
@@ -23,6 +25,9 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
 
     @Autowired
     private ServerProperties serverProperties;
+
+    @Autowired(required = false)
+    private Bus bus;
 
     private OidcServerBuilder authorizationServerBuilder;
 
@@ -50,7 +55,7 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     @Override
     public void configure(HttpSecurity http) throws Exception {
         //super.configure(http);
-        authorizationServerBuilder = new OidcServerBuilder(serverProperties);
+        authorizationServerBuilder = new OidcServerBuilder(serverProperties, bus);
         for (AuthorizationServerConfigurer configurer : configurers) {
             configurer.configure(authorizationServerBuilder);
         }
@@ -64,8 +69,7 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     @Override
     public void init(WebSecurity web) throws Exception {
         super.init(web);
-        // TODO init oidcServer
-        authorizationServerBuilder.getEndpoints()
-
+        OidcServer oidcServer = authorizationServerBuilder.build();
+        oidcServer.start();
     }
 }

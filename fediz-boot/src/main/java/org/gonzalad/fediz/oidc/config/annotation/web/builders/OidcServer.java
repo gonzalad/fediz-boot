@@ -1,28 +1,23 @@
 package org.gonzalad.fediz.oidc.config.annotation.web.builders;
 
-import java.util.Arrays;
+import java.util.Optional;
 
 import org.apache.cxf.Bus;
+import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthDataProvider;
-import org.apache.cxf.rs.security.oauth2.services.AccessTokenService;
-import org.apache.cxf.rs.security.oauth2.services.AuthorizationService;
-import org.apache.cxf.rs.security.oauth2.services.TokenIntrospectionService;
-import org.apache.cxf.rs.security.oidc.idp.OidcConfigurationService;
-import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
-import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
 
 /**
  * @author agonzalez
  */
 public class OidcServer {
     private OAuthDataProvider authDataProvider;
-    private AccessTokenService tokenEndpoint;
-    private TokenIntrospectionService introspectionEndpoint;
-    private AuthorizationService authorizationEndpoint;
-    private OidcConfigurationService discoveryEndpoint;
-    private OidcKeysService jwkEndpoint;
-    private UserInfoService userInfoEndpoint;
+    private JAXRSServerFactoryBean discoveryEndpoint;
+    private JAXRSServerFactoryBean jwkEndpoint;
+    private JAXRSServerFactoryBean userInfoEndpoint;
     private Bus bus;
+    private JAXRSServerFactoryBean oauth2Endpoint;
+    private JAXRSServerFactoryBean idpEndpoint;
+
 
     public void setBus(Bus bus) {
         this.bus = bus;
@@ -32,39 +27,35 @@ public class OidcServer {
         this.authDataProvider = authDataProvider;
     }
 
-    public void setTokenEndpoint(AccessTokenService tokenEndpoint) {
-        this.tokenEndpoint = tokenEndpoint;
-    }
-
-    public void setIntrospectionEndpoint(TokenIntrospectionService introspectionEndpoint) {
-        this.introspectionEndpoint = introspectionEndpoint;
-    }
-
-    public void setAuthorizationEndpoint(AuthorizationService authorizationEndpoint) {
-        this.authorizationEndpoint = authorizationEndpoint;
-    }
-
-    public void setDiscoveryEndpoint(OidcConfigurationService discoveryEndpoint) {
+    public void setDiscoveryEndpoint(JAXRSServerFactoryBean discoveryEndpoint) {
         this.discoveryEndpoint = discoveryEndpoint;
     }
 
-    public void setJwkEndpoint(OidcKeysService jwkEndpoint) {
+    public void setJwkEndpoint(JAXRSServerFactoryBean jwkEndpoint) {
         this.jwkEndpoint = jwkEndpoint;
     }
 
-    public void setUserInfoEndpoint(UserInfoService userInfoEndpoint) {
+    public void setUserInfoEndpoint(JAXRSServerFactoryBean userInfoEndpoint) {
         this.userInfoEndpoint = userInfoEndpoint;
     }
 
+    public void setOAuth2Endpoint(JAXRSServerFactoryBean oauth2Endpoint) {
+        this.oauth2Endpoint = oauth2Endpoint;
+    }
+
     public void start() {
-//        endpoint.setBus(bus);
-//        endpoint.setServiceBeans(Arrays.<Object>asList(configurationService));
-//        endpoint.setAddress("/.well-known");
-//        endpoint.init();
-//        return endpoint;
+        Optional.ofNullable(discoveryEndpoint).ifPresent(it -> it.init());
+        Optional.ofNullable(jwkEndpoint).ifPresent(it -> it.init());
+        Optional.ofNullable(userInfoEndpoint).ifPresent(it -> it.init());
+        Optional.ofNullable(oauth2Endpoint).ifPresent(it -> it.init());
+        Optional.ofNullable(idpEndpoint).ifPresent(it -> it.init());
     }
 
     public void stop() {
 
+    }
+
+    public void setIdpEndpoint(JAXRSServerFactoryBean idpEndpoint) {
+        this.idpEndpoint = idpEndpoint;
     }
 }
