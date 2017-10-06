@@ -1,7 +1,6 @@
 package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
 
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
@@ -15,8 +14,9 @@ public class FedizOidcServerProperties implements InitializingBean {
     private String issuer;
     private String basePath;
     private Long accessTokenLifetime;
+
     @NestedConfigurationProperty
-    private Ssl ssl;
+    private Jwk jwk = new Jwk();
 
     public String getIssuer() {
         return issuer;
@@ -42,12 +42,12 @@ public class FedizOidcServerProperties implements InitializingBean {
         this.accessTokenLifetime = accessTokenLifetime;
     }
 
-    public Ssl getSsl() {
-        return ssl;
+    public Jwk getJwk() {
+        return jwk;
     }
 
-    public void setSsl(Ssl ssl) {
-        this.ssl = ssl;
+    public void setJwk(Jwk jwk) {
+        this.jwk = jwk;
     }
 
     @Override

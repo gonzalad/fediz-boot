@@ -69,11 +69,11 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     public void configure(HttpSecurity http) throws Exception {
         //super.configure(http);
         oidcServerProperties.setAccessTokenLifetime(serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : DEFAULT_ACCESS_TOKEN_LIFETIME);
-        if (oidcServerProperties.getSsl() == null) {
+        if (oidcServerProperties.getJwk().getLocalStore() == null) {
             // if missing, we take general ssl configuration from Spring
-            oidcServerProperties.setSsl(serverProperties.getSsl());
-            if (oidcServerProperties.getSsl() == null) {
-                throw new IllegalStateException("Configuration property fediz.oidc.ssl or server.ssl missing");
+            oidcServerProperties.getJwk().setLocalStore(serverProperties.getSsl());
+            if (oidcServerProperties.getJwk().getLocalStore() == null) {
+                throw new IllegalStateException("Configuration property fediz.oidc.jwk.local-store or server.ssl missing");
             }
         }
         authorizationServerBuilder = new OidcServerBuilder(oidcServerProperties, bus);

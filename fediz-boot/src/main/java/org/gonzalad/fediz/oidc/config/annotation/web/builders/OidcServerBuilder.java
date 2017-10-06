@@ -276,7 +276,7 @@ public class OidcServerBuilder {
             return existingProperties;
         }
         Map<String, Object> newMap = new HashMap<>(existingProperties != null ? existingProperties : Collections.emptyMap());
-        Ssl ssl = serverProperties.getSsl();
+        Ssl ssl = serverProperties.getJwk().getLocalStore();
         // TODO: we must handle relative keyStoreFile locations.
         // I made a single test with absolute file, which is ugly :
         // fediz.oidc.ssl.key-store: /home/agonzalez/git-projects/fediz-boot/fediz-boot/src/main/resources/samples/oidc.jks
