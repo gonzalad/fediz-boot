@@ -33,7 +33,15 @@ import org.apache.cxf.rs.security.oidc.idp.OidcConfigurationService;
 import org.apache.cxf.rs.security.oidc.idp.OidcHybridService;
 import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
 import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
-import org.springframework.boot.autoconfigure.web.ServerProperties;
+import org.gonzalad.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
+import org.springframework.boot.context.embedded.Ssl;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_PSWD;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_ALIAS;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_FILE;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_PSWD;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_TYPE;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_INCLUDE_KEY_ID;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_KEY_PSWD_PROVIDER;
 
 /**
  * @author agonzalez
@@ -56,10 +64,6 @@ public class OidcServerBuilder {
      * See list in https://tools.ietf.org/html/rfc7591
      */
     private static final List<String> ACCEPTED_GRANTS = Arrays.asList(GRANT_REFRESH, "password", GRANT_AUTHORIZATION_CODE, GRANT_IMPLICIT, "client_credentials");
-
-    private String basePath;
-
-    private String issuer;
 
     private List<JAXRSServerFactoryBean> endpoints = new ArrayList<>();
 
@@ -91,7 +95,9 @@ public class OidcServerBuilder {
 
     private CxfBuilder cxfBuilder = new CxfBuilder();
 
-    public OidcServerBuilder(ServerProperties serverProperties, Bus bus) {
+    private FedizOidcServerProperties serverProperties;
+
+    public OidcServerBuilder(FedizOidcServerProperties serverProperties, Bus bus) {
         if (serverProperties == null) {
             throw new IllegalArgumentException("Parameter serverProperties is required");
         }
@@ -99,6 +105,7 @@ public class OidcServerBuilder {
         this.grants = Defaults.grants();
         this.scopesRequiringNoConsent = Defaults.scopesRequiringNoConsent();
         this.cxfBuilder.bus = bus;
+        this.serverProperties = serverProperties;
     }
 
     public CxfBuilder cxf() {
@@ -134,11 +141,6 @@ public class OidcServerBuilder {
         return this;
     }
 
-    public OidcServerBuilder issuer(String issuer) {
-        OidcServerBuilder.this.issuer = issuer;
-        return this;
-    }
-
     public OidcServer build() {
         OidcServer oidcServer = new OidcServer();
         oidcServer.setBus(cxfBuilder.bus);
@@ -156,32 +158,38 @@ public class OidcServerBuilder {
     }
 
     private JAXRSServerFactoryBean buildIdpEndpoint() {
-        Map<String, Object> defaultProperties = new HashMap<>();
-        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
-        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        buildKeyManagementProperties(idpEndpointBuilder);
         // TODO handle viewProvider endpoint and bundle default resources inside jar (i.e use Spring Boot here ?)
         List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider());
         List<Object> services = new ArrayList<>();
         Optional.ofNullable(buildAuthorizationService()).ifPresent(it -> services.add(it));
         // TODO logout
-        return buildEndpoint(idpEndpointBuilder, services, defaultProperties, defaultProviders);
+        return buildEndpoint(idpEndpointBuilder, services, Collections.emptyMap(), defaultProviders);
     }
 
     private JAXRSServerFactoryBean buildOAuth2Endpoint() {
-        Map<String, Object> defaultProperties = new HashMap<>();
-        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
-        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        buildKeyManagementProperties(oAuth2EndpointBuilder);
         List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider());
         List<Object> services = new ArrayList<>();
         Optional.ofNullable(buildTokenService()).ifPresent(it -> services.add(it));
         Optional.ofNullable(buildIntrospectionEndpoint()).ifPresent(it -> services.add(it));
-        return buildEndpoint(oAuth2EndpointBuilder, services, defaultProperties, defaultProviders);
+        return buildEndpoint(oAuth2EndpointBuilder, services, Collections.emptyMap(), defaultProviders);
     }
 
     private JAXRSServerFactoryBean buildDiscoveryEndpoint() {
-        Map<String, Object> defaultProperties = new HashMap<>();
-        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
-        return buildEndpoint(discoveryEndpointBuilder, buildDiscoveryService(), defaultProperties, Collections.emptyList());
+        buildKeyManagementProperties(oAuth2EndpointBuilder);
+        return buildEndpoint(discoveryEndpointBuilder, buildDiscoveryService());
+    }
+
+    private JAXRSServerFactoryBean buildUserInfoEndpoint() {
+        EndpointBuilder endpointBuilder = new EndpointBuilder<>();
+        endpointBuilder.address("/users");
+        buildKeyManagementProperties(endpointBuilder);
+        List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonMapObjectProvider());
+        UserInfoService userInfoService = new UserInfoService();
+        userInfoService.setOauthDataProvider(oauthDataProvider);
+        userInfoService.setJwsRequired(false);
+        return buildEndpoint(endpointBuilder, userInfoService, Collections.emptyMap(), defaultProviders);
     }
 
     private Object buildOAuthJsonProvider() {
@@ -200,19 +208,6 @@ public class OidcServerBuilder {
     // Should only be used from our Configuration
     public OAuthDataProvider getAuthDataProvider() {
         return oauthDataProvider;
-    }
-
-    private JAXRSServerFactoryBean buildUserInfoEndpoint() {
-        EndpointBuilder endpointBuilder = new EndpointBuilder<>();
-        endpointBuilder.address("/users");
-        Map<String, Object> defaultProperties = new HashMap<>();
-        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
-        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
-        List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonMapObjectProvider());
-        UserInfoService userInfoService = new UserInfoService();
-        userInfoService.setOauthDataProvider(oauthDataProvider);
-        userInfoService.setJwsRequired(false);
-        return buildEndpoint(endpointBuilder, userInfoService, defaultProperties, defaultProviders);
     }
 
     private UserInfoService buildUserInfoService() {
@@ -254,17 +249,61 @@ public class OidcServerBuilder {
     }
 
     private JAXRSServerFactoryBean buildJwkEndpoint() {
-        Map<String, Object> defaultProperties = new HashMap<>();
-        defaultProperties.put("rs.security.signature.properties", "rs.security.properties");
-        defaultProperties.put("rs.security.signature.key.password.provider", buildPrivateKeyPasswordProvider());
+        buildKeyManagementProperties(jwkEndpointBuilder);
         List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonWebKeysProvider());
-        return buildEndpoint(jwkEndpointBuilder, new OidcKeysService(), defaultProperties, defaultProviders);
+        return buildEndpoint(jwkEndpointBuilder, new OidcKeysService(), Collections.emptyMap(), defaultProviders);
+    }
+
+    private void buildKeyManagementProperties(EndpointBuilder endpointBuilder) {
+        endpointBuilder.properties = buildKeyManagementProperties(endpointBuilder.properties);
+    }
+
+    /**
+     * Hack code to transform Spring Ssl information to information usable
+     * by JwsUtils and KeyManagementUtils.
+     * <p>
+     * if existingProperties already contain a rs.security.signature, we don't do nothing
+     * (in this case, we suppose the developer wanted to customize himself the properties).
+     * <p>
+     * Notes: we don't specify the algorithm (RSSEC_SIGNATURE_ALGORITHM), so it will default
+     * to RS256.
+     *
+     * @param existingProperties existing endpoint properties
+     * @return the new endpoint properties with the added rs.security.signature.* keys
+     */
+    private Map<String, Object> buildKeyManagementProperties(Map<String, Object> existingProperties) {
+        if (existingProperties != null && existingProperties.keySet().stream().filter(it -> it.startsWith("rs.security.signature")).findAny().isPresent()) {
+            return existingProperties;
+        }
+        Map<String, Object> newMap = new HashMap<>(existingProperties != null ? existingProperties : Collections.emptyMap());
+        Ssl ssl = serverProperties.getSsl();
+        // TODO: we must handle relative keyStoreFile locations.
+        // I made a single test with absolute file, which is ugly :
+        // fediz.oidc.ssl.key-store: /home/agonzalez/git-projects/fediz-boot/fediz-boot/src/main/resources/samples/oidc.jks
+        //
+        // and we should also check if Spring SSL handles classpath: or any other springies goodies and be able
+        // to have the same behaviour (in this case using here a resourceLoader is need be).
+        //
+        // and finally, Fediz appears to be able to use a keyClient (what is it ? appears interesting... could we support
+        // that easily ?)
+        Optional.ofNullable(ssl.getKeyStore()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_FILE, ssl.getKeyStore()));
+        Optional.ofNullable(ssl.getKeyStoreType()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_TYPE, ssl.getKeyStoreType()));
+        Optional.ofNullable(ssl.getKeyStorePassword()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_PSWD, ssl.getKeyStorePassword()));
+        Optional.ofNullable(ssl.getKeyAlias()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_ALIAS, ssl.getKeyAlias()));
+        Optional.ofNullable(ssl.getKeyPassword()).ifPresent(it -> newMap.put(RSSEC_KEY_PSWD, ssl.getKeyPassword()));
+        newMap.put(RSSEC_SIGNATURE_INCLUDE_KEY_ID, "true");
+        newMap.put(RSSEC_SIGNATURE_KEY_PSWD_PROVIDER, buildPrivateKeyPasswordProvider());
+        return newMap;
     }
 
     private CrossOriginResourceSharingFilter corsFilter() {
         CrossOriginResourceSharingFilter corsFilter = new CrossOriginResourceSharingFilter();
         corsFilter.setAllowHeaders(Arrays.asList("Authorization"));
         return corsFilter;
+    }
+
+    private JAXRSServerFactoryBean buildEndpoint(EndpointBuilder endpointBuilder, Object service) {
+        return buildEndpoint(endpointBuilder, Arrays.asList(service), Collections.emptyMap(), Collections.emptyList());
     }
 
     private JAXRSServerFactoryBean buildEndpoint(EndpointBuilder endpointBuilder, Object service,
@@ -305,10 +344,7 @@ public class OidcServerBuilder {
 
     private SubjectCreator buildSubjectCreator() {
         FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
-        if (issuer == null) {
-            throw new IllegalStateException("issuer property is required");
-        }
-        subjectCreator.setIdTokenIssuer(issuer);
+        subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
         subjectCreator.setSupportedClaims(supportedClaims);
         return subjectCreator;
     }
@@ -341,16 +377,13 @@ public class OidcServerBuilder {
 
     private static class Defaults {
 
-        private static final long DEFAULT_ACCESS_TOKEN_LIFETIME = 1800;
 
-        private static OAuthDataProviderImpl authDataProvider(ServerProperties serverProperties) {
+        private static OAuthDataProviderImpl authDataProvider(FedizOidcServerProperties serverProperties) {
             OAuthDataProviderImpl authDataProvider = new OAuthDataProviderImpl();
             authDataProvider.setSupportedScopes(supportedScopes());
             authDataProvider.setInvisibleToClientScopes(invisibleToClientScopes());
             authDataProvider.setSupportedScopes(supportedScopes());
-            long sessionTimeout = serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : 0;
-            long accessTokenLifetime = sessionTimeout > 0 ? sessionTimeout : DEFAULT_ACCESS_TOKEN_LIFETIME;
-            authDataProvider.setAccessTokenLifetime(accessTokenLifetime);
+            authDataProvider.setAccessTokenLifetime(serverProperties.getAccessTokenLifetime());
             return authDataProvider;
         }
 

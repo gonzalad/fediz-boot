@@ -1,6 +1,5 @@
 package org.gonzalad.fediz.sample.oidc.config;
 
-import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.gonzalad.fediz.oidc.config.annotation.web.configuration.AuthorizationServerConfigurerAdapter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -28,11 +27,6 @@ public class WebSecurityConfig extends AuthorizationServerConfigurerAdapter {
                 .and()
                 .logout()
                 .permitAll();
-    }
-
-    @Override
-    public void configure(OidcServerBuilder authorizationServer) throws Exception {
-        authorizationServer.issuer("http://localhost:8080");
     }
 
     @Autowired

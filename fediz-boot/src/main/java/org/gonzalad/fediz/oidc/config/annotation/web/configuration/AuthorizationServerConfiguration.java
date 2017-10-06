@@ -8,20 +8,26 @@ import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServer;
 import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import static org.gonzalad.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties.DEFAULT_ACCESS_TOKEN_LIFETIME;
 
 /**
  * @author agonzalez
  */
 @Configuration
+@EnableConfigurationProperties(FedizOidcServerProperties.class)
 public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapter implements Ordered {
 
     @Autowired(required = false)
     private List<AuthorizationServerConfigurer> configurers = Collections.emptyList();
+
+    private FedizOidcServerProperties oidcServerProperties;
+
 
     @Autowired
     private ServerProperties serverProperties;
@@ -32,6 +38,13 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     private OidcServerBuilder authorizationServerBuilder;
 
     private int order = 2;
+
+    public AuthorizationServerConfiguration(FedizOidcServerProperties oidcServerProperties) {
+        if (oidcServerProperties == null) {
+            throw new IllegalArgumentException("Parameter oidcServerProperties is required");
+        }
+        this.oidcServerProperties = oidcServerProperties;
+    }
 
     public int getOrder() {
         return order;
@@ -55,7 +68,15 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     @Override
     public void configure(HttpSecurity http) throws Exception {
         //super.configure(http);
-        authorizationServerBuilder = new OidcServerBuilder(serverProperties, bus);
+        oidcServerProperties.setAccessTokenLifetime(serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : DEFAULT_ACCESS_TOKEN_LIFETIME);
+        if (oidcServerProperties.getSsl() == null) {
+            // if missing, we take general ssl configuration from Spring
+            oidcServerProperties.setSsl(serverProperties.getSsl());
+            if (oidcServerProperties.getSsl() == null) {
+                throw new IllegalStateException("Configuration property fediz.oidc.ssl or server.ssl missing");
+            }
+        }
+        authorizationServerBuilder = new OidcServerBuilder(oidcServerProperties, bus);
         for (AuthorizationServerConfigurer configurer : configurers) {
             configurer.configure(authorizationServerBuilder);
         }
