@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org"
+>
+<!--
+move that (and all other UI stuff) to fediz-boot.
+and allow developer to override this stuff or to disable this UI
+-->
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title>Authorization Error</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="error-panel">
+    <h2 class="error-title">Something went wrong here.</h2>
+    <div class="error-desc" th:text="${model.error + ': ' + model.errorDescription}">Error description.</div>
+    <div class="error-desc">Please contact your administrator.</div>
+</div>
+</body>
+</html>

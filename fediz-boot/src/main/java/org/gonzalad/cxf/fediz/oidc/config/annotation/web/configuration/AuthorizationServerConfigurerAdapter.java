@@ -1,6 +1,6 @@
-package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
+package org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration;
 
-import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 
 /**

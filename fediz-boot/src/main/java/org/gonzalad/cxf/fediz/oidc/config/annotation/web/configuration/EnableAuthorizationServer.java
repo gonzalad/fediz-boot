@@ -1,4 +1,4 @@
-package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
+package org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;

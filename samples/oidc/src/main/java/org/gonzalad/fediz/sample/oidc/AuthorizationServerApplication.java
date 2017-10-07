@@ -1,6 +1,6 @@
 package org.gonzalad.fediz.sample.oidc;
 
-import org.gonzalad.fediz.oidc.config.annotation.web.configuration.EnableAuthorizationServer;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.EnableAuthorizationServer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

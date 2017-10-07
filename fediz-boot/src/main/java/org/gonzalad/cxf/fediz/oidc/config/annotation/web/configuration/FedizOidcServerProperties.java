@@ -1,4 +1,4 @@
-package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
+package org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration;
 
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;

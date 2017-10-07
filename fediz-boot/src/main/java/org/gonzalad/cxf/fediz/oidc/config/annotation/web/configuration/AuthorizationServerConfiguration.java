@@ -1,12 +1,13 @@
-package org.gonzalad.fediz.oidc.config.annotation.web.configuration;
+package org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration;
 
 import java.util.Collections;
 import java.util.List;
 
 import org.apache.cxf.Bus;
-import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServer;
-import org.gonzalad.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +15,9 @@ import org.springframework.core.Ordered;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import static org.gonzalad.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties.DEFAULT_ACCESS_TOKEN_LIFETIME;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.ViewResolver;
+import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 
 /**
  * @author agonzalez
@@ -28,9 +31,17 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
 
     private FedizOidcServerProperties oidcServerProperties;
 
-
     @Autowired
     private ServerProperties serverProperties;
+
+    @Autowired
+    private ViewResolver viewResolver;
+
+    @Autowired(required = false)
+    private LocaleResolver localeResolver;
+
+    @Value("${cxf.path:/services}")
+    private String cxfBasePath;
 
     @Autowired(required = false)
     private Bus bus;
@@ -38,6 +49,8 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     private OidcServerBuilder authorizationServerBuilder;
 
     private int order = 2;
+
+    private OidcServer oidcServer;
 
     public AuthorizationServerConfiguration(FedizOidcServerProperties oidcServerProperties) {
         if (oidcServerProperties == null) {
@@ -68,7 +81,7 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     @Override
     public void configure(HttpSecurity http) throws Exception {
         //super.configure(http);
-        oidcServerProperties.setAccessTokenLifetime(serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : DEFAULT_ACCESS_TOKEN_LIFETIME);
+        oidcServerProperties.setAccessTokenLifetime(serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : FedizOidcServerProperties.DEFAULT_ACCESS_TOKEN_LIFETIME);
         if (oidcServerProperties.getJwk().getLocalStore() == null) {
             // if missing, we take general ssl configuration from Spring
             oidcServerProperties.getJwk().setLocalStore(serverProperties.getSsl());
@@ -76,9 +89,18 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
                 throw new IllegalStateException("Configuration property fediz.oidc.jwk.local-store or server.ssl missing");
             }
         }
-        authorizationServerBuilder = new OidcServerBuilder(oidcServerProperties, bus);
+        if (oidcServerProperties.getBasePath() == null) {
+            String basePath = cxfBasePath != null ? cxfBasePath.replaceFirst("/\\*?$", "") : cxfBasePath;
+            oidcServerProperties.setBasePath(cxfBasePath);
+        }
+        authorizationServerBuilder = new OidcServerBuilder(oidcServerProperties, bus, viewResolver, getLocaleResolver());
         for (AuthorizationServerConfigurer configurer : configurers) {
             configurer.configure(authorizationServerBuilder);
+        }
+        oidcServer = authorizationServerBuilder.build();
+        oidcServer.configure(http);
+        for (AuthorizationServerConfigurer configurer : configurers) {
+            configurer.configure(http);
         }
         if (configurers.isEmpty()) {
             // Add anyRequest() last as a fall back in case user
@@ -87,10 +109,16 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
         }
     }
 
+    private LocaleResolver getLocaleResolver() {
+        if (localeResolver == null) {
+            localeResolver = new AcceptHeaderLocaleResolver();
+        }
+        return localeResolver;
+    }
+
     @Override
     public void init(WebSecurity web) throws Exception {
         super.init(web);
-        OidcServer oidcServer = authorizationServerBuilder.build();
         oidcServer.start();
     }
 }

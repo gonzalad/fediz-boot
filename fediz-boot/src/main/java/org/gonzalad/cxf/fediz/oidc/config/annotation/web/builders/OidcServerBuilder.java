@@ -1,4 +1,4 @@
-package org.gonzalad.fediz.oidc.config.annotation.web.builders;
+package org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,7 +10,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.cxf.Bus;
-import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
 import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
@@ -18,8 +17,10 @@ import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
 import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
 import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
+import org.apache.cxf.rs.security.oauth2.common.Client;
 import org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler;
 import org.apache.cxf.rs.security.oauth2.provider.AccessTokenGrantHandler;
+import org.apache.cxf.rs.security.oauth2.provider.ClientRegistrationProvider;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthDataProvider;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthJSONProvider;
 import org.apache.cxf.rs.security.oauth2.provider.SubjectCreator;
@@ -33,8 +34,12 @@ import org.apache.cxf.rs.security.oidc.idp.OidcConfigurationService;
 import org.apache.cxf.rs.security.oidc.idp.OidcHybridService;
 import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
 import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
-import org.gonzalad.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
+import org.gonzalad.cxf.fediz.jaxrs.provider.SpringViewResolverProvider;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
+import org.gonzalad.cxf.fediz.oidc.provider.LocalSubjectCreator;
 import org.springframework.boot.context.embedded.Ssl;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.ViewResolver;
 import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_PSWD;
 import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_ALIAS;
 import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_FILE;
@@ -65,6 +70,10 @@ public class OidcServerBuilder {
      */
     private static final List<String> ACCEPTED_GRANTS = Arrays.asList(GRANT_REFRESH, "password", GRANT_AUTHORIZATION_CODE, GRANT_IMPLICIT, "client_credentials");
 
+    private final ViewResolver viewResolver;
+
+    private final LocaleResolver localeResolver;
+
     private List<JAXRSServerFactoryBean> endpoints = new ArrayList<>();
 
     private OAuthDataProvider oauthDataProvider;
@@ -83,21 +92,24 @@ public class OidcServerBuilder {
 
     private boolean skipAuthorizationWithOidcScope;
 
-    private Map<String, String> supportedClaims;
+    private Map<String, String> supportedClaims = Collections.emptyMap();
 
-    private OAuth2EndpointBuilder oAuth2EndpointBuilder = new OAuth2EndpointBuilder();
+    private OAuth2EndpointBuilder oAuth2EndpointBuilder;
 
-    private JwkEndpointBuilder jwkEndpointBuilder = new JwkEndpointBuilder();
+    private ClientRegistrationProviderBuilder clientRegistrationProviderBuilder;
 
-    private IdpEndpointBuilder idpEndpointBuilder = new IdpEndpointBuilder();
+    private JwkEndpointBuilder jwkEndpointBuilder;
 
-    private DiscoveryEndpointBuilder discoveryEndpointBuilder = new DiscoveryEndpointBuilder();
+    private IdpEndpointBuilder idpEndpointBuilder;
+
+    private DiscoveryEndpointBuilder discoveryEndpointBuilder;
 
     private CxfBuilder cxfBuilder = new CxfBuilder();
 
     private FedizOidcServerProperties serverProperties;
 
-    public OidcServerBuilder(FedizOidcServerProperties serverProperties, Bus bus) {
+    public OidcServerBuilder(FedizOidcServerProperties serverProperties, Bus bus, ViewResolver viewResolver,
+                             LocaleResolver localeResolver) {
         if (serverProperties == null) {
             throw new IllegalArgumentException("Parameter serverProperties is required");
         }
@@ -106,6 +118,13 @@ public class OidcServerBuilder {
         this.scopesRequiringNoConsent = Defaults.scopesRequiringNoConsent();
         this.cxfBuilder.bus = bus;
         this.serverProperties = serverProperties;
+        this.viewResolver = viewResolver;
+        this.localeResolver = localeResolver;
+        this.clientRegistrationProviderBuilder = new ClientRegistrationProviderBuilder();
+        this.oAuth2EndpointBuilder = new OAuth2EndpointBuilder();
+        this.jwkEndpointBuilder = new JwkEndpointBuilder();
+        this.idpEndpointBuilder = new IdpEndpointBuilder();
+        this.discoveryEndpointBuilder = new DiscoveryEndpointBuilder();
     }
 
     public CxfBuilder cxf() {
@@ -132,6 +151,10 @@ public class OidcServerBuilder {
         return discoveryEndpointBuilder;
     }
 
+    public ClientRegistrationProviderBuilder clientRegistration() {
+        return clientRegistrationProviderBuilder;
+    }
+
     private PrivateKeyPasswordProvider buildPrivateKeyPasswordProvider() {
         return new PrivateKeyPasswordProviderImpl();
     }
@@ -144,6 +167,7 @@ public class OidcServerBuilder {
     public OidcServer build() {
         OidcServer oidcServer = new OidcServer();
         oidcServer.setBus(cxfBuilder.bus);
+        oidcServer.setBasePath(serverProperties.getBasePath());
         oidcServer.setAuthDataProvider(oauthDataProvider);
         oidcServer.setOAuth2Endpoint(buildOAuth2Endpoint());
         oidcServer.setDiscoveryEndpoint(buildDiscoveryEndpoint());
@@ -151,16 +175,36 @@ public class OidcServerBuilder {
         oidcServer.setJwkEndpoint(buildJwkEndpoint());
         oidcServer.setUserInfoEndpoint(buildUserInfoEndpoint());
         oidcServer.setIdpEndpoint(buildIdpEndpoint());
+        oidcServer.setClientRegistrationProvider(buildClientRegistrationProvider());
 //        oidcServer.setDynamicClientRegistrationEndpoint(oauthDataProvider);
 //        oidcServer.setUserConsole(oauthDataProvider);
 //        oidcServer.setAdditionalEndpoints(endpoints);
         return oidcServer;
     }
 
+    private ClientRegistrationProvider buildClientRegistrationProvider() {
+        ClientRegistrationProvider clientRegistrationProvider = clientRegistrationProviderBuilder.clientRegistrationProvider;
+        if (clientRegistrationProvider == null) {
+            if (oauthDataProvider instanceof ClientRegistrationProvider) {
+                clientRegistrationProvider = (ClientRegistrationProvider) oauthDataProvider;
+            }
+        }
+        if (clientRegistrationProvider == null) {
+            if (!clientRegistrationProviderBuilder.clients.isEmpty()) {
+                throw new IllegalStateException("Cannot create OIDC clients with null clientRegistrationProvider");
+            }
+        }
+        for (Client client : clientRegistrationProviderBuilder.clients) {
+            // TODO: shouldn't we wait for oidcServer to be fully initialized before creating clients ?
+            clientRegistrationProvider.setClient(client);
+        }
+        return clientRegistrationProvider;
+    }
+
     private JAXRSServerFactoryBean buildIdpEndpoint() {
         buildKeyManagementProperties(idpEndpointBuilder);
         // TODO handle viewProvider endpoint and bundle default resources inside jar (i.e use Spring Boot here ?)
-        List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider());
+        List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider(), idpEndpointBuilder.viewProvider);
         List<Object> services = new ArrayList<>();
         Optional.ofNullable(buildAuthorizationService()).ifPresent(it -> services.add(it));
         // TODO logout
@@ -182,7 +226,7 @@ public class OidcServerBuilder {
     }
 
     private JAXRSServerFactoryBean buildUserInfoEndpoint() {
-        EndpointBuilder endpointBuilder = new EndpointBuilder<>();
+        EndpointBuilder endpointBuilder = new EndpointBuilder<>(this);
         endpointBuilder.address("/users");
         buildKeyManagementProperties(endpointBuilder);
         List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonMapObjectProvider());
@@ -233,6 +277,7 @@ public class OidcServerBuilder {
             authorizationCodeService.setCanSupportPublicClients(false);
         }
         authorizationCodeService.setSubjectCreator(subjectCreator);
+        authorizationCodeService.setScopesRequiringNoConsent(scopesRequiringNoConsent);
         if (grants.contains(GRANT_AUTHORIZATION_CODE)) {
             services.add(authorizationCodeService);
         }
@@ -245,6 +290,7 @@ public class OidcServerBuilder {
             service.setCodeService(authorizationCodeService);
             services.add(service);
         }
+        authorizationService.setServices(services);
         return authorizationService;
     }
 
@@ -343,10 +389,15 @@ public class OidcServerBuilder {
     }
 
     private SubjectCreator buildSubjectCreator() {
-        FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
+        LocalSubjectCreator subjectCreator = new LocalSubjectCreator();
         subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
         subjectCreator.setSupportedClaims(supportedClaims);
+        // TODO be able to configure idToken expiration
         return subjectCreator;
+//        FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
+//        subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
+//        subjectCreator.setSupportedClaims(supportedClaims);
+//        return subjectCreator;
     }
 
     private TokenIntrospectionService buildIntrospectionEndpoint() {
@@ -376,7 +427,6 @@ public class OidcServerBuilder {
     }
 
     private static class Defaults {
-
 
         private static OAuthDataProviderImpl authDataProvider(FedizOidcServerProperties serverProperties) {
             OAuthDataProviderImpl authDataProvider = new OAuthDataProviderImpl();
@@ -415,9 +465,14 @@ public class OidcServerBuilder {
     }
 
     public static class EndpointBuilder<B, O extends EndpointBuilder<B, O>> {
-        String address;
-        List<? extends Object> providers;
-        Map<String, Object> properties;
+        private String address;
+        private List<? extends Object> providers;
+        private Map<String, Object> properties;
+        private B parentBuilder;
+
+        public EndpointBuilder(B parentBuilder) {
+            this.parentBuilder = parentBuilder;
+        }
 
         public O address(String address) {
             this.address = address;
@@ -437,11 +492,16 @@ public class OidcServerBuilder {
         private O getSelf() {
             return (O) this;
         }
+
+        public B and() {
+            return parentBuilder;
+        }
     }
 
     public class JwkEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
 
         public JwkEndpointBuilder() {
+            super(OidcServerBuilder.this);
             super.address = "/jwk";
         }
     }
@@ -449,6 +509,7 @@ public class OidcServerBuilder {
     public class DiscoveryEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
 
         public DiscoveryEndpointBuilder() {
+            super(OidcServerBuilder.this);
             super.address = "/.well-known";
         }
     }
@@ -456,6 +517,7 @@ public class OidcServerBuilder {
     public class OAuth2EndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
 
         public OAuth2EndpointBuilder() {
+            super(OidcServerBuilder.this);
             super.address = "/oauth2";
         }
 
@@ -486,8 +548,8 @@ public class OidcServerBuilder {
                 return (OAuthDataProviderImpl) OidcServerBuilder.this.oauthDataProvider;
             }
 
-            public OAuth2EndpointBuilder and() {
-                return OAuth2EndpointBuilder.this;
+            public OidcServerBuilder and() {
+                return OidcServerBuilder.this;
             }
         }
 
@@ -539,14 +601,67 @@ public class OidcServerBuilder {
         }
     }
 
-    public class IdpEndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
+    public class ClientRegistrationProviderBuilder {
 
-        public IdpEndpointBuilder() {
-            super.address = "/idp";
+        private ClientRegistrationProvider clientRegistrationProvider;
+
+        private List<Client> clients = new ArrayList<>();
+
+        public ClientRegistrationProviderBuilder custom(
+                ClientRegistrationProvider clientRegistrationProvider) {
+            this.clientRegistrationProvider = clientRegistrationProvider;
+            return this;
         }
 
-        public IdpEndpointBuilder and() {
-            return IdpEndpointBuilder.this;
+        public ClientRegistrationProviderBuilder clients(Client... clients) {
+            return clients(Arrays.asList(clients));
+        }
+
+        public ClientRegistrationProviderBuilder clients(List<Client> clients) {
+            clients.forEach(it -> validate(it));
+            this.clients.addAll(clients);
+            return this;
+        }
+
+        private void validate(Client client) {
+            if (client.getClientId() == null) {
+                throw new IllegalArgumentException("Cannot register client: clientId is required");
+            }
+            if (client.getClientId().contains(":")) {
+                throw new IllegalArgumentException(String.format("Cannot register client '%s': clientId must not contain ':'", client.getClientId()));
+            }
+            if (client.getClientSecret() != null && client.getClientSecret().contains(":")) {
+                throw new IllegalArgumentException(String.format("Cannot register client '%s': clientSecret must not contain ':'", client.getClientId()));
+            }
+        }
+
+        public OidcServerBuilder and() {
+            return OidcServerBuilder.this;
+        }
+    }
+
+    public class IdpEndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
+
+        private Object viewProvider;
+
+        public IdpEndpointBuilder() {
+            super(OidcServerBuilder.this);
+            super.address = "/idp";
+            viewProvider = defaultViewProvider();
+        }
+
+        private Object defaultViewProvider() {
+            SpringViewResolverProvider viewProvider = new SpringViewResolverProvider(OidcServerBuilder.this.viewResolver, localeResolver);
+            viewProvider.setUseClassNames(true);
+            viewProvider.setBeanName("model");
+            viewProvider.setResourcePaths(Collections.singletonMap("/remove", "registeredClients"));
+            viewProvider.setClassResources(Collections.singletonMap("org.apache.cxf.fediz.service.oidc.clients.InvalidRegistration", "invalidRegistration"));
+            return viewProvider;
+        }
+
+        public IdpEndpointBuilder viewResolver(Object viewResolver) {
+            this.viewProvider = viewResolver;
+            return this;
         }
 
         public AuthorizationCodeBuilder authorizationCode() {
@@ -572,8 +687,8 @@ public class OidcServerBuilder {
                 return this;
             }
 
-            public IdpEndpointBuilder and() {
-                return IdpEndpointBuilder.this;
+            public OidcServerBuilder and() {
+                return OidcServerBuilder.this;
             }
         }
     }
