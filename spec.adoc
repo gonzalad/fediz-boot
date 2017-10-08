@@ -34,6 +34,104 @@ I'm listing them here (just not to forget) :
  . MongoDb store for OIDC Server. +
    Use Mongo db native feature for handling expiration.
 
+== TODO list
+
+[cols="2,5a", options="header"]
+|===
+| Name
+| Description
+
+| Spring Boot Idp
+|
+
+| Spring Boot Sts
+|
+
+| OIDC - Configure Local Idp
+|
+
+| OIDC - Configure Remote Idp
+|
+
+| OIDC - Configure Local Sts
+|
+
+| OIDC - Configure Remote Sts
+|
+
+| Configure fediz_context.xml from application.properties
+| If that's not possible, be able to use whatever spring variable
+  from fediz_config.xml, and be able to embed fediz_config.xml inside spring
+  application (ie. in the jar).
+
+| Review General approach (builder/configurer/configuration)
+|
+| OIDC - Should work oob without any custom WebSecurityConfiguration |
+
+| Create a MongoOAuthDataProvider
+|
+
+| OIDC - Create Default UI
+| Should be :
+
+* overridable
+* deactivable via a spring configuration property
+* embedded inside fediz-boot jar
+
+|OIDC - Check if RS works
+|
+
+|OIDC/IDP/STS - Auto-configure/start cxfBus
+|If the basePath is not empty and a custom bus hasn't been
+ provided, create, configure and start a cxfBus for each oidc/sts/idp.
+
+| OIDC - openid-configuration URL
+| /.well-known/openid-configuration should be made accessible
+ from root path or at least oidc basePath.
+
+| Fediz Boot vs Spring Security OAuth
+| Spring Security OAuth also provides a OIDC Server. +
+  What are the pros/cons of each approach (make it really clear) ?
+
+| OIDC/IDP/STS - Builder review
+| Check that :
+
+ * all interesting configuration tweaks can be done from the builder
+ * builder API is easy to use.
+ * optionally, check that it the end developer can customise the API (custom DSL, add builders, etc... ?)
+
+| OIDC - create a ClientBuilder
+| Registering clients from API is only for demo/prototype purposes, nevertheless
+  we need a good, easy to use and error prone API (i.e. if clientSecret is set, the client cannot
+  be confidential, etc... So some checks and automatic conf must be done inside the builder).
+
+| Fix SpringViewResolverProvider
+| This providers blows up whenever a view is not found or a view doesn't compile.
+
+
+| Global approach: POC or clean dev from start ?
+| Do we try to implement all major features in a POC way (draft code), or in a clean way ?
+  I'd say POC way (too much unknown).
+
+| OIDC - consent scopes
+| Resolve i18n message from Spring MessageSource/MessageResolver and
+| configure default scopes for known scopes in fediz-boot jar
+
+| OAuthDataProvider - configurable via application.properties
+| OOB OAuthDataProvider types (EhCache, JPA, ...) must be configurable from
+  application.properties (i.e. fediz.oidc.oauth.data-provider.type=jpa|ehcache).
+
+| OIDC/IDP - Default Login Page
+| fediz-oidc must bundle a default login page with :
+
+ * optionally display Client logo image logo.
+ * optionally display Client home link.
+ * optionally display Powered by Fediz logo.
+ * etc... (basically we must take advantage of all Client info registered -
+   see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)
+
+|===
+
 
 == How to configure OIDC Authorization Server
 
