@@ -22,10 +22,10 @@
         shouldn't have to specify an explicit version for CXF (it should come
         from fediz)
         -->
-        <cxf.version>3.2.1-SNAPSHOT</cxf.version>
+        <cxf.version>3.1.13</cxf.version>
         <commons-lang3.version>3.5</commons-lang3.version>
         <ehcache.version>2.10.4</ehcache.version>
-        <fediz.version>2.0.0-SNAPSHOT</fediz.version>
+        <fediz.version>1.4.2</fediz.version>
         <spring-boot.version>1.5.7.RELEASE</spring-boot.version>
         <springloaded.version>1.2.6.RELEASE</springloaded.version>
     </properties>
@@ -63,12 +63,22 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.cxf.fediz</groupId>
+                <artifactId>fediz-idp-core</artifactId>
+                <version>${fediz.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.cxf.fediz</groupId>
                 <artifactId>fediz-core</artifactId>
                 <version>${fediz.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.cxf</groupId>
                 <artifactId>cxf-rt-rs-security-sso-oidc</artifactId>
+                <version>${cxf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.cxf.services.sts</groupId>
+                <artifactId>cxf-services-sts-core</artifactId>
                 <version>${cxf.version}</version>
             </dependency>
             <dependency>
@@ -84,6 +94,11 @@
             <dependency>
                 <groupId>org.apache.cxf</groupId>
                 <artifactId>cxf-spring-boot-starter-jaxrs</artifactId>
+                <version>${cxf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.cxf</groupId>
+                <artifactId>cxf-rt-frontend-jaxws</artifactId>
                 <version>${cxf.version}</version>
             </dependency>
             <dependency>
