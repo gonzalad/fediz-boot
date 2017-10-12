@@ -4,8 +4,8 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.cxf.Bus;
-import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServer;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServerBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.web.ServerProperties;

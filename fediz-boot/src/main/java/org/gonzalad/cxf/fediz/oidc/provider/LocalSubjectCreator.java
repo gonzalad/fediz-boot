@@ -39,6 +39,8 @@ public class LocalSubjectCreator implements SubjectCreator {
     private long defaultTimeToLive = 3600L;
     private Map<String, String> supportedClaims = Collections.emptyMap();
 
+    private ClaimsExtractor claimsExtractor = new SimpleClaimsExtractor();
+
     @Override
     public UserSubject createUserSubject(MessageContext mc,
                                          MultivaluedMap<String, String> params) throws OAuthServiceException {
@@ -196,4 +198,7 @@ public class LocalSubjectCreator implements SubjectCreator {
         this.stripPathFromIssuerUri = stripPathFromIssuerUri;
     }
 
+    public void setClaimsExtractor(ClaimsExtractor claimsExtractor) {
+        this.claimsExtractor = claimsExtractor;
+    }
 }

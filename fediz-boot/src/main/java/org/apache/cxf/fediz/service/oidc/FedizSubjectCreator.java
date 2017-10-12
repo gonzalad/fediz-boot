@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -23,19 +23,15 @@ import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
-
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 
-import org.w3c.dom.Element;
-
-import org.apache.cxf.fediz.core.Claim;
-import org.apache.cxf.fediz.core.ClaimCollection;
 import org.apache.cxf.fediz.core.ClaimTypes;
 import org.apache.cxf.fediz.core.FedizConstants;
-import org.apache.cxf.fediz.core.FedizPrincipal;
 import org.apache.cxf.jaxrs.ext.MessageContext;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException;
 import org.apache.cxf.rs.security.oauth2.provider.SubjectCreator;
@@ -43,58 +39,68 @@ import org.apache.cxf.rs.security.oauth2.utils.OAuthConstants;
 import org.apache.cxf.rs.security.oidc.common.IdToken;
 import org.apache.cxf.rs.security.oidc.idp.OidcUserSubject;
 import org.apache.cxf.rs.security.oidc.utils.OidcUtils;
-import org.apache.wss4j.common.ext.WSSecurityException;
-import org.apache.wss4j.common.saml.SamlAssertionWrapper;
-import org.joda.time.DateTime;
-import org.opensaml.saml.saml2.core.Assertion;
-import org.opensaml.saml.saml2.core.Issuer;
 
 
 public class FedizSubjectCreator implements SubjectCreator {
+    public static final String ROLES_CLAIMS = "roles";
     private static final String ROLES_SCOPE = "roles";
     private boolean stripPathFromIssuerUri;
     private String issuer;
     private long defaultTimeToLive = 3600L;
     private Map<String, String> supportedClaims = Collections.emptyMap();
 
+    /**
+     * TODO add SimpleClaimsMapper
+     */
+    private List<ClaimsProvider> claimsProviders = Arrays.asList(new SAMLClaimsProvider(), new SimpleSubjectCreator());
+
     @Override
     public OidcUserSubject createUserSubject(MessageContext mc,
                                              MultivaluedMap<String, String> params) throws OAuthServiceException {
         Principal principal = mc.getSecurityContext().getUserPrincipal();
-
-        if (!(principal instanceof FedizPrincipal)) {
-            throw new OAuthServiceException("Unsupported Principal");
-        }
-        FedizPrincipal fedizPrincipal = (FedizPrincipal)principal;
+        ClaimsProvider claimsProvider = retrieveClaimsProvider(principal, mc.getHttpServletRequest());
 
         // In the future FedizPrincipal will likely have JWT claims already prepared,
         // with IdToken being initialized here from those claims
         OidcUserSubject oidcSub = new OidcUserSubject();
-        oidcSub.setLogin(fedizPrincipal.getName());
+        oidcSub.setLogin(principal.getName());
 
-        oidcSub.setId(fedizPrincipal.getName());
+        oidcSub.setId(principal.getName());
 
         IdToken idToken = convertToIdToken(mc,
-                fedizPrincipal.getLoginToken(),
                 oidcSub.getLogin(),
                 oidcSub.getId(),
-                fedizPrincipal.getClaims(),
-                fedizPrincipal.getRoleClaims(),
+                claimsProvider.extract(principal),
                 params);
         oidcSub.setIdToken(idToken);
-        oidcSub.setRoles(fedizPrincipal.getRoleClaims());
+        oidcSub.setRoles(idToken.getListStringProperty(ROLES_SCOPE));
         // UserInfo can be populated and set on OidcUserSubject too.
         // UserInfoService will create it otherwise.
 
         return oidcSub;
     }
 
+    private ClaimsProvider retrieveClaimsProvider(Principal principal, HttpServletRequest request) {
+
+        // in case a custom authenticationProvider adds its own claimsProvider
+        // i.e. custom authenticationProvider handles both authentication and claimsProvider
+        ClaimsProvider claimsProvider = (ClaimsProvider) request.getAttribute("claimsProvider");
+        if (claimsProvider != null) {
+            return claimsProvider;
+        }
+
+        for (ClaimsProvider provider : claimsProviders) {
+            if (provider.supports(principal)) {
+                return provider;
+            }
+        }
+        throw new OAuthServiceException("No claimsProvider for current principal");
+    }
+
     private IdToken convertToIdToken(MessageContext mc,
-                                     Element samlToken,
                                      String subjectName,
                                      String subjectId,
-                                     ClaimCollection claims,
-                                     List<String> roles,
+                                     Map<String, Object> claims,
                                      MultivaluedMap<String, String> params) {
         // The current SAML Assertion represents an authentication record.
         // It has to be translated into IdToken (JWT) so that it can be returned
@@ -106,55 +112,38 @@ public class FedizSubjectCreator implements SubjectCreator {
         idToken.setPreferredUserName(subjectName);
         idToken.setSubject(subjectId);
 
-        Assertion saml2Assertion = getSaml2Assertion(samlToken);
-        if (saml2Assertion != null) {
-            // issueInstant
-            DateTime issueInstant = saml2Assertion.getIssueInstant();
-            if (issueInstant != null) {
-                idToken.setIssuedAt(issueInstant.getMillis() / 1000);
-            }
+        // issueInstant
+        // TODO replace those with constants
+        Date iat = (Date) claims.get("iat");
+        idToken.setIssuedAt(iat != null ? iat.getTime() / 1000 : System.currentTimeMillis() / 1000);
 
-            // expiryTime
-            if (saml2Assertion.getConditions() != null) {
-                DateTime expires = saml2Assertion.getConditions().getNotOnOrAfter();
-                if (expires != null) {
-                    idToken.setExpiryTime(expires.getMillis() / 1000);
-                }
-            }
+        // expiryTime
+        Date exp = (Date) claims.get("exp");
+        idToken.setIssuedAt(exp != null ? exp.getTime() / 1000 : System.currentTimeMillis() / 1000);
 
-            // authInstant
-            if (!saml2Assertion.getAuthnStatements().isEmpty()) {
-                DateTime authInstant =
-                        saml2Assertion.getAuthnStatements().get(0).getAuthnInstant();
-                idToken.setAuthenticationTime(authInstant.getMillis() / 1000L);
-            }
-        }
-        // Check if default issuer, issuedAt and expiryTime values have to be set
-        if (issuer != null) {
-            String realIssuer = null;
-            if (issuer.startsWith("/")) {
-                UriBuilder ub = mc.getUriInfo().getBaseUriBuilder();
-                URI uri = ub.path(issuer).build();
-                if (this.stripPathFromIssuerUri) {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(uri.getScheme()).append("://").append(uri.getHost());
-                    if (uri.getPort() != -1) {
-                        sb.append(':').append(uri.getPort());
-                    }
-                    realIssuer = sb.toString();
-                } else {
-                    realIssuer = uri.toString();
+        // authInstant
+        Date auth_time = (Date) claims.get("auth_time");
+        idToken.setAuthenticationTime(auth_time != null ? auth_time.getTime() / 1000 : System.currentTimeMillis() / 1000);
+
+        // issuer
+        String realIssuer = null;
+        if (issuer == null || issuer.startsWith("/")) {
+            UriBuilder ub = mc.getUriInfo().getBaseUriBuilder();
+            URI uri = ub.path(issuer).build();
+            if (this.stripPathFromIssuerUri) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(uri.getScheme()).append("://").append(uri.getHost());
+                if (uri.getPort() != -1) {
+                    sb.append(':').append(uri.getPort());
                 }
+                realIssuer = sb.toString();
             } else {
-                realIssuer = issuer;
+                realIssuer = uri.toString();
             }
-            idToken.setIssuer(realIssuer);
-        } else if (saml2Assertion != null) {
-            Issuer assertionIssuer = saml2Assertion.getIssuer();
-            if (assertionIssuer != null) {
-                idToken.setIssuer(assertionIssuer.getValue());
-            }
+        } else {
+            realIssuer = issuer;
         }
+        idToken.setIssuer(realIssuer);
 
         long currentTimeInSecs = System.currentTimeMillis() / 1000;
         if (idToken.getIssuedAt() == null) {
@@ -188,29 +177,30 @@ public class FedizSubjectCreator implements SubjectCreator {
         if (claims != null) {
             String firstName = null;
             String lastName = null;
-            for (Claim c : claims) {
+            for (Map.Entry<String, Object> c : claims.entrySet()) {
                 if (!(c.getValue() instanceof String)) {
                     continue;
                 }
-                if (ClaimTypes.FIRSTNAME.equals(c.getClaimType())) {
-                    idToken.setGivenName((String)c.getValue());
-                    firstName = (String)c.getValue();
-                } else if (ClaimTypes.LASTNAME.equals(c.getClaimType())) {
-                    idToken.setFamilyName((String)c.getValue());
-                    lastName = (String)c.getValue();
-                } else if (ClaimTypes.EMAILADDRESS.equals(c.getClaimType())) {
-                    idToken.setEmail((String)c.getValue());
-                } else if (supportedClaims.containsKey(c.getClaimType().toString())
-                        && requestedClaimsList.contains(supportedClaims.get(c.getClaimType().toString()))) {
-                    idToken.setClaim(supportedClaims.get(c.getClaimType().toString()), (String)c.getValue());
+                // TODO : change SAML names to oidc names
+                if (ClaimTypes.FIRSTNAME.equals(c.getKey())) {
+                    idToken.setGivenName((String) c.getValue());
+                    firstName = (String) c.getValue();
+                } else if (ClaimTypes.LASTNAME.equals(c.getKey())) {
+                    idToken.setFamilyName((String) c.getValue());
+                    lastName = (String) c.getValue();
+                } else if (ClaimTypes.EMAILADDRESS.equals(c.getKey())) {
+                    idToken.setEmail((String) c.getValue());
+                } else if (supportedClaims.containsKey(c.getKey().toString())
+                        && requestedClaimsList.contains(supportedClaims.get(c.getKey().toString()))) {
+                    idToken.setClaim(supportedClaims.get(c.getKey().toString()), c.getValue());
                 }
-
             }
             if (firstName != null && lastName != null) {
                 idToken.setName(firstName + " " + lastName);
             }
         }
 
+        List<Object> roles = (List<Object>) claims.get(ROLES_CLAIMS);
         if (roles != null && !roles.isEmpty()
                 && supportedClaims.containsKey(FedizConstants.DEFAULT_ROLE_URI.toString())) {
 
@@ -236,18 +226,6 @@ public class FedizSubjectCreator implements SubjectCreator {
 
     }
 
-    private Assertion getSaml2Assertion(Element samlToken) {
-        // Should a null assertion lead to the exception ?
-        try {
-            SamlAssertionWrapper wrapper = new SamlAssertionWrapper(samlToken);
-            return wrapper.getSaml2();
-        } catch (WSSecurityException ex) {
-            throw new OAuthServiceException("Error converting SAML token", ex);
-        }
-
-    }
-
-
     public void setIdTokenIssuer(String idTokenIssuer) {
         this.issuer = idTokenIssuer;
     }
@@ -272,4 +250,11 @@ public class FedizSubjectCreator implements SubjectCreator {
         this.stripPathFromIssuerUri = stripPathFromIssuerUri;
     }
 
+    public void setClaimsProvider(ClaimsProvider claimsProvider) {
+        setClaimsProviders(Collections.singletonList(claimsProvider));
+    }
+
+    public void setClaimsProviders(List<ClaimsProvider> claimsProvider) {
+        this.claimsProviders = claimsProvider;
+    }
 }

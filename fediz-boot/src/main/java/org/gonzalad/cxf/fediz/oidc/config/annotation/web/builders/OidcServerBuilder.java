@@ -10,6 +10,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.cxf.Bus;
+import org.apache.cxf.fediz.service.oidc.ClaimsProvider;
+import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
 import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
@@ -36,7 +38,6 @@ import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
 import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
 import org.gonzalad.cxf.fediz.jaxrs.provider.SpringViewResolverProvider;
 import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
-import org.gonzalad.cxf.fediz.oidc.provider.LocalSubjectCreator;
 import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.ViewResolver;
@@ -108,6 +109,8 @@ public class OidcServerBuilder {
 
     private FedizOidcServerProperties serverProperties;
 
+    private ClaimsProvider claimsProvider;
+
     public OidcServerBuilder(FedizOidcServerProperties serverProperties, Bus bus, ViewResolver viewResolver,
                              LocaleResolver localeResolver) {
         if (serverProperties == null) {
@@ -145,6 +148,11 @@ public class OidcServerBuilder {
     public JwkEndpointBuilder jwk() {
         // be cautious : handle reentrancy...
         return this.jwkEndpointBuilder;
+    }
+
+    public OidcServerBuilder claimsProvider(ClaimsProvider claimsProvider) {
+        this.claimsProvider = claimsProvider;
+        return this;
     }
 
     public DiscoveryEndpointBuilder discovery() {
@@ -389,10 +397,19 @@ public class OidcServerBuilder {
     }
 
     private SubjectCreator buildSubjectCreator() {
-        LocalSubjectCreator subjectCreator = new LocalSubjectCreator();
+//        LocalSubjectCreator subjectCreator = new LocalSubjectCreator();
+//        subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
+//        subjectCreator.setSupportedClaims(supportedClaims);
+//        subjectCreator.setStripPathFromIssuerUri(true);
+        // TODO be able to configure idToken expiration
+        FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
         subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
         subjectCreator.setSupportedClaims(supportedClaims);
-        // TODO be able to configure idToken expiration
+        subjectCreator.setStripPathFromIssuerUri(true);
+        if (claimsProvider != null) {
+            subjectCreator.setClaimsProvider(claimsProvider);
+
+        }
         return subjectCreator;
 //        FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
 //        subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
@@ -607,6 +624,12 @@ public class OidcServerBuilder {
 
         private List<Client> clients = new ArrayList<>();
 
+        /**
+         * TODO will need to create Map with homeId -> label (label dynamically
+         * resolved from Spring MessageSourceResolvable)
+         */
+        private List<String> homeRealms = new ArrayList<>();
+
         public ClientRegistrationProviderBuilder custom(
                 ClientRegistrationProvider clientRegistrationProvider) {
             this.clientRegistrationProvider = clientRegistrationProvider;
@@ -620,6 +643,15 @@ public class OidcServerBuilder {
         public ClientRegistrationProviderBuilder clients(List<Client> clients) {
             clients.forEach(it -> validate(it));
             this.clients.addAll(clients);
+            return this;
+        }
+
+        public ClientRegistrationProviderBuilder homeRealms(String... homeRealms) {
+            return realms(Arrays.asList(homeRealms));
+        }
+
+        public ClientRegistrationProviderBuilder realms(List<String> homeRealms) {
+            this.homeRealms.addAll(homeRealms);
             return this;
         }
 
