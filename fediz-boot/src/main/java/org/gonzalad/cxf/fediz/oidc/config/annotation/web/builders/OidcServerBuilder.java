@@ -14,6 +14,10 @@ import org.apache.cxf.fediz.service.oidc.ClaimsProvider;
 import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
 import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
+import org.apache.cxf.fediz.service.oidc.logout.BackChannelLogoutHandler;
+import org.apache.cxf.fediz.service.oidc.logout.LogoutHandler;
+import org.apache.cxf.fediz.service.oidc.logout.LogoutService;
+import org.apache.cxf.fediz.service.oidc.logout.TokenCleanupHandler;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
 import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
@@ -22,9 +26,12 @@ import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
 import org.apache.cxf.rs.security.oauth2.common.Client;
 import org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler;
 import org.apache.cxf.rs.security.oauth2.provider.AccessTokenGrantHandler;
+import org.apache.cxf.rs.security.oauth2.provider.ClientIdProvider;
 import org.apache.cxf.rs.security.oauth2.provider.ClientRegistrationProvider;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthDataProvider;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthJSONProvider;
+import org.apache.cxf.rs.security.oauth2.provider.OAuthJoseJwtProducer;
+import org.apache.cxf.rs.security.oauth2.provider.ProviderAuthenticationStrategy;
 import org.apache.cxf.rs.security.oauth2.provider.SubjectCreator;
 import org.apache.cxf.rs.security.oauth2.services.AccessTokenService;
 import org.apache.cxf.rs.security.oauth2.services.AuthorizationService;
@@ -81,17 +88,11 @@ public class OidcServerBuilder {
 
     private AccessTokenService accessTokenService;
 
-    private List<String> grants;
-
     private TokenIntrospectionService tokenIntrospectionService;
 
     private boolean tokenIntrospectionDisabled;
 
     private AuthorizationService authorizationService;
-
-    private List<String> scopesRequiringNoConsent;
-
-    private boolean skipAuthorizationWithOidcScope;
 
     private Map<String, String> supportedClaims = Collections.emptyMap();
 
@@ -111,14 +112,14 @@ public class OidcServerBuilder {
 
     private ClaimsProvider claimsProvider;
 
+    private List<String> grants = new ArrayList<>(Defaults.grants());
+
     public OidcServerBuilder(FedizOidcServerProperties serverProperties, Bus bus, ViewResolver viewResolver,
                              LocaleResolver localeResolver) {
         if (serverProperties == null) {
             throw new IllegalArgumentException("Parameter serverProperties is required");
         }
         this.oauthDataProvider = Defaults.authDataProvider(serverProperties);
-        this.grants = Defaults.grants();
-        this.scopesRequiringNoConsent = Defaults.scopesRequiringNoConsent();
         this.cxfBuilder.bus = bus;
         this.serverProperties = serverProperties;
         this.viewResolver = viewResolver;
@@ -150,8 +151,13 @@ public class OidcServerBuilder {
         return this.jwkEndpointBuilder;
     }
 
-    public OidcServerBuilder claimsProvider(ClaimsProvider claimsProvider) {
-        this.claimsProvider = claimsProvider;
+    public OidcServerBuilder grantHandlers(String... grantHandlers) {
+        List<String> grants = new ArrayList<String>(Arrays.asList(grantHandlers));
+        List<String> invalidGrants = grants.stream().filter(it -> !ACCEPTED_GRANTS.contains(it)).collect(Collectors.toList());
+        if (invalidGrants.size() > 0) {
+            throw new IllegalArgumentException(String.format("The following grants are not supported by fediz %s", invalidGrants));
+        }
+        this.grants = grants;
         return this;
     }
 
@@ -215,7 +221,7 @@ public class OidcServerBuilder {
         List<Object> defaultProviders = Arrays.asList(buildOAuthJsonProvider(), idpEndpointBuilder.viewProvider);
         List<Object> services = new ArrayList<>();
         Optional.ofNullable(buildAuthorizationService()).ifPresent(it -> services.add(it));
-        // TODO logout
+        Optional.ofNullable(buildLogoutService()).ifPresent(it -> services.add(it));
         return buildEndpoint(idpEndpointBuilder, services, Collections.emptyMap(), defaultProviders);
     }
 
@@ -275,31 +281,59 @@ public class OidcServerBuilder {
         }
         authorizationService = new AuthorizationService();
         List<RedirectionBasedGrantService> services = new ArrayList<>();
-        SubjectCreator subjectCreator = buildSubjectCreator();
-        OidcAuthorizationCodeService authorizationCodeService = new OidcAuthorizationCodeService();
-        authorizationCodeService.setDataProvider(oauthDataProvider);
-        authorizationCodeService.setSkipAuthorizationWithOidcScope(skipAuthorizationWithOidcScope);
-        if (grants.contains(GRANT_IMPLICIT)) {
-            authorizationCodeService.setCanSupportPublicClients(true);
+        if (idpEndpointBuilder.authorizationService.services.isEmpty()) {
+            SubjectCreator subjectCreator = buildSubjectCreator();
+            OidcAuthorizationCodeService authorizationCodeService = new OidcAuthorizationCodeService();
+            authorizationCodeService.setDataProvider(oauthDataProvider);
+            authorizationCodeService.setSkipAuthorizationWithOidcScope(idpEndpointBuilder.authorizationService.skipAuthorizationWithOidcScope);
+            authorizationCodeService.setSubjectCreator(subjectCreator);
+            authorizationCodeService.setScopesRequiringNoConsent(idpEndpointBuilder.authorizationService.scopesRequiringNoConsent);
+            if (grants.contains(GRANT_IMPLICIT)) {
+                authorizationCodeService.setCanSupportPublicClients(true);
+            } else {
+                authorizationCodeService.setCanSupportPublicClients(false);
+            }
+            if (grants.contains(GRANT_AUTHORIZATION_CODE)) {
+                services.add(authorizationCodeService);
+            }
+            if (grants.contains(GRANT_IMPLICIT)) {
+                OidcHybridService service = new OidcHybridService();
+                service.setDataProvider(oauthDataProvider);
+                service.setSubjectCreator(subjectCreator);
+                service.setScopesRequiringNoConsent(idpEndpointBuilder.authorizationService.scopesRequiringNoConsent);
+                service.setResponseFilter(buildIdTokenResponseFilter());
+                service.setCodeService(authorizationCodeService);
+                services.add(service);
+            }
         } else {
-            authorizationCodeService.setCanSupportPublicClients(false);
-        }
-        authorizationCodeService.setSubjectCreator(subjectCreator);
-        authorizationCodeService.setScopesRequiringNoConsent(scopesRequiringNoConsent);
-        if (grants.contains(GRANT_AUTHORIZATION_CODE)) {
-            services.add(authorizationCodeService);
-        }
-        if (grants.contains(GRANT_IMPLICIT)) {
-            OidcHybridService service = new OidcHybridService();
-            service.setDataProvider(oauthDataProvider);
-            service.setSubjectCreator(subjectCreator);
-            service.setScopesRequiringNoConsent(scopesRequiringNoConsent);
-            service.setResponseFilter(buildIdTokenResponseFilter());
-            service.setCodeService(authorizationCodeService);
-            services.add(service);
+            services.addAll(idpEndpointBuilder.authorizationService.services);
         }
         authorizationService.setServices(services);
         return authorizationService;
+    }
+
+    private LogoutService buildLogoutService() {
+        IdpEndpointBuilder.LogoutServiceBuilder logoutBuilder = idpEndpointBuilder.logoutService;
+        if (logoutBuilder.logoutService != null) {
+            return logoutBuilder.logoutService;
+        }
+        // TODO if external idp, then create SAMLLogoutService
+        LogoutService logoutService = new LogoutService();
+        if (logoutBuilder.backChannelLogoutHandler != null) {
+            logoutService.setBackChannelLogoutHandler(logoutBuilder.backChannelLogoutHandler);
+        } else {
+            BackChannelLogoutHandler backChannelLogoutHandler = new BackChannelLogoutHandler();
+            backChannelLogoutHandler.setDataProvider(this.oauthDataProvider);
+            logoutService.setBackChannelLogoutHandler(backChannelLogoutHandler);
+        }
+        if (logoutBuilder.logoutHandlers.size() > 0) {
+            logoutService.setLogoutHandlers(logoutBuilder.logoutHandlers);
+        } else {
+            TokenCleanupHandler tokenCleanupHandler = new TokenCleanupHandler();
+            tokenCleanupHandler.setDataProvider(this.oauthDataProvider);
+            logoutService.setLogoutHandlers(Arrays.asList(tokenCleanupHandler));
+        }
+        return logoutService;
     }
 
     private JAXRSServerFactoryBean buildJwkEndpoint() {
@@ -433,11 +467,17 @@ public class OidcServerBuilder {
         AccessTokenService accessTokenService = new AccessTokenService();
         accessTokenService.setDataProvider(oauthDataProvider);
         accessTokenService.setResponseFilter(buildIdTokenResponseFilter());
+        accessTokenService.setBlockUnsecureRequests(oAuth2EndpointBuilder.tokenServiceBuilder.blockUnsecureRequests);
+        accessTokenService.setClientIdProvider(oAuth2EndpointBuilder.tokenServiceBuilder.clientIdProvider);
         List<AccessTokenGrantHandler> grantHandlers = new ArrayList<>();
-        if (grants.contains(GRANT_REFRESH)) {
-            RefreshTokenGrantHandler refreshTokenGrantHandler = new RefreshTokenGrantHandler();
-            refreshTokenGrantHandler.setDataProvider(oauthDataProvider);
-            grantHandlers.add(refreshTokenGrantHandler);
+        if (oAuth2EndpointBuilder.tokenServiceBuilder.grantHandlers.isEmpty()) {
+            if (grants.contains(GRANT_REFRESH)) {
+                RefreshTokenGrantHandler refreshTokenGrantHandler = new RefreshTokenGrantHandler();
+                refreshTokenGrantHandler.setDataProvider(oauthDataProvider);
+                grantHandlers.add(refreshTokenGrantHandler);
+            }
+        } else {
+            grantHandlers.addAll(oAuth2EndpointBuilder.tokenServiceBuilder.grantHandlers);
         }
         accessTokenService.setGrantHandlers(grantHandlers);
         return accessTokenService;
@@ -533,12 +573,22 @@ public class OidcServerBuilder {
 
     public class OAuth2EndpointBuilder extends EndpointBuilder<OidcServerBuilder, OAuth2EndpointBuilder> {
 
+        private TokenServiceBuilder tokenServiceBuilder = new TokenServiceBuilder();
+
         public OAuth2EndpointBuilder() {
             super(OidcServerBuilder.this);
             super.address = "/oauth2";
         }
 
+        public TokenServiceBuilder tokenService() {
+            return tokenServiceBuilder;
+        }
+
         public class TokenServiceBuilder {
+
+            public ClientIdProvider clientIdProvider;
+            private boolean blockUnsecureRequests;
+            private List<AccessTokenGrantHandler> grantHandlers = new ArrayList<>();
 
             public TokenServiceBuilder custom(
                     AccessTokenService accessTokenService) {
@@ -546,13 +596,22 @@ public class OidcServerBuilder {
                 return this;
             }
 
-            public TokenServiceBuilder grantHandlers(String... grantHandlers) {
-                List<String> grants = new ArrayList<String>(Arrays.asList(grantHandlers));
-                List<String> invalidGrants = grants.stream().filter(it -> !ACCEPTED_GRANTS.contains(it)).collect(Collectors.toList());
-                if (invalidGrants.size() > 0) {
-                    throw new IllegalArgumentException(String.format("The following grants are not supported by fediz %s", invalidGrants));
-                }
-                OidcServerBuilder.this.grants = grants;
+            public TokenServiceBuilder grantHandlers(AccessTokenGrantHandler... grantHandlers) {
+                return grantHandlers(new ArrayList<AccessTokenGrantHandler>(Arrays.asList(grantHandlers)));
+            }
+
+            public TokenServiceBuilder grantHandlers(List<AccessTokenGrantHandler> grantHandlers) {
+                this.grantHandlers.addAll(grantHandlers);
+                return this;
+            }
+
+            public TokenServiceBuilder clientIdProvider(ClientIdProvider clientIdProvider) {
+                this.clientIdProvider = clientIdProvider;
+                return this;
+            }
+
+            public TokenServiceBuilder blockUnsecureRequests(boolean blockUnsecureRequests) {
+                this.blockUnsecureRequests = blockUnsecureRequests;
                 return this;
             }
 
@@ -591,6 +650,8 @@ public class OidcServerBuilder {
 
     public class OAuthDataProviderBuilder {
 
+        private Map<String, String> supportedScopes = new HashMap<>();
+
         public OAuthDataProviderBuilder custom(
                 OAuthDataProvider oauthDataProvider) {
             OidcServerBuilder.this.oauthDataProvider = oauthDataProvider;
@@ -598,9 +659,81 @@ public class OidcServerBuilder {
         }
 
         public OAuthDataProviderBuilder supportedScopes(String... supportedScopes) {
-            List<String> scopes = new ArrayList<String>(Arrays.asList(supportedScopes));
+            return supportedScopes(new ArrayList<String>(Arrays.asList(supportedScopes)));
+        }
+
+        public OAuthDataProviderBuilder supportedScopes(List<String> supportedScopes) {
             // todo handle scope label (i18n: use spring MessageSource)
-            castToImpl("supportedScopes").setSupportedScopes(scopes.stream().collect(Collectors.toMap(it -> it, it -> it)));
+            this.supportedScopes.putAll(supportedScopes.stream().collect(Collectors.toMap(it -> it, it -> it)));
+            castToImpl("supportedScopes").setSupportedScopes(this.supportedScopes);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder defaultScopes(String... defaultScopes) {
+            return defaultScopes(new ArrayList<String>(Arrays.asList(defaultScopes)));
+        }
+
+        public OAuthDataProviderBuilder defaultScopes(List<String> defaultScopes) {
+            List<String> scopes = castToImpl("defaultScopes").getDefaultScopes();
+            scopes.addAll(defaultScopes);
+            castToImpl("defaultScopes").setDefaultScopes(scopes);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder invisibleToClientScopes(String... invisibleToClientScopes) {
+            return invisibleToClientScopes(new ArrayList<String>(Arrays.asList(invisibleToClientScopes)));
+        }
+
+        public OAuthDataProviderBuilder invisibleToClientScopes(List<String> invisibleToClientScopes) {
+            List<String> scopes = castToImpl("invisibleToClientScopes").getInvisibleToClientScopes();
+            scopes.addAll(invisibleToClientScopes);
+            castToImpl("invisibleToClientScopes").setInvisibleToClientScopes(scopes);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder recycleRefreshTokens(boolean recycleRefreshTokens) {
+            castToImpl("recycleRefreshTokens").setRecycleRefreshTokens(recycleRefreshTokens);
+            return this;
+        }
+
+        /**
+         * Defaults to 1 hour.
+         */
+        public OAuthDataProviderBuilder accessTokenLifetime(long accessTokenLifetimeSec) {
+            castToImpl("accessTokenLifetime").setAccessTokenLifetime(accessTokenLifetimeSec);
+            return this;
+        }
+
+        /**
+         * Eternal by default (-1).
+         */
+        public OAuthDataProviderBuilder refreshTokenLifetime(long refreshTokenLifetimeSec) {
+            castToImpl("refreshTokenLifetime").setRefreshTokenLifetime(refreshTokenLifetimeSec);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder useJwtFormatForAccessTokens(boolean useJwtFormatForAccessTokens) {
+            castToImpl("useJwtFormatForAccessTokens").setUseJwtFormatForAccessTokens(useJwtFormatForAccessTokens);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder authenticationStrategy(ProviderAuthenticationStrategy authenticationStrategy) {
+            castToImpl("authenticationStrategy").setAuthenticationStrategy(authenticationStrategy);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder jwtAccessTokenProducer(OAuthJoseJwtProducer jwtAccessTokenProducer) {
+            castToImpl("jwtAccessTokenProducer").setJwtAccessTokenProducer(jwtAccessTokenProducer);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder jwtAccessTokenClaimMap(Map<String, String> jwtAccessTokenClaimMap) {
+            castToImpl("jwtAccessTokenClaimMap").setJwtAccessTokenClaimMap(jwtAccessTokenClaimMap);
+            return this;
+        }
+
+        public OAuthDataProviderBuilder supportPreauthorizedTokens(boolean supportPreauthorizedTokens) {
+            castToImpl("supportPreauthorizedTokens").setSupportPreauthorizedTokens(supportPreauthorizedTokens);
             return this;
         }
 
@@ -647,10 +780,10 @@ public class OidcServerBuilder {
         }
 
         public ClientRegistrationProviderBuilder homeRealms(String... homeRealms) {
-            return realms(Arrays.asList(homeRealms));
+            return homeRealms(Arrays.asList(homeRealms));
         }
 
-        public ClientRegistrationProviderBuilder realms(List<String> homeRealms) {
+        public ClientRegistrationProviderBuilder homeRealms(List<String> homeRealms) {
             this.homeRealms.addAll(homeRealms);
             return this;
         }
@@ -676,6 +809,10 @@ public class OidcServerBuilder {
 
         private Object viewProvider;
 
+        private AuthorizationServiceBuilder authorizationService = new AuthorizationServiceBuilder();
+
+        private LogoutServiceBuilder logoutService = new LogoutServiceBuilder();
+
         public IdpEndpointBuilder() {
             super(OidcServerBuilder.this);
             super.address = "/idp";
@@ -696,31 +833,87 @@ public class OidcServerBuilder {
             return this;
         }
 
-        public AuthorizationCodeBuilder authorizationCode() {
-            return new AuthorizationCodeBuilder();
+        public IdpEndpointBuilder claimsProvider(ClaimsProvider claimsProvider) {
+            OidcServerBuilder.this.claimsProvider = claimsProvider;
+            return this;
+        }
+
+        public IdpEndpointBuilder supportedClaims(Map<String, String> supportedClaims) {
+            OidcServerBuilder.this.supportedClaims = supportedClaims;
+            return this;
+        }
+
+        public AuthorizationServiceBuilder authorizationService() {
+            return authorizationService;
+        }
+
+        public LogoutServiceBuilder logoutService() {
+            return logoutService;
         }
 
         // TODO add logoutBuilder...
 
-        public class AuthorizationCodeBuilder {
+        public class AuthorizationServiceBuilder {
 
-            public AuthorizationCodeBuilder scopesRequiringNoConsent(String... scopesRequiringNoConsent) {
-                OidcServerBuilder.this.scopesRequiringNoConsent = new ArrayList<String>(Arrays.asList(scopesRequiringNoConsent));
+            private List<RedirectionBasedGrantService> services = new ArrayList<>();
+
+            private List<String> scopesRequiringNoConsent = Defaults.scopesRequiringNoConsent();
+
+            private boolean skipAuthorizationWithOidcScope;
+
+            public AuthorizationServiceBuilder services(RedirectionBasedGrantService... services) {
+                return services(Arrays.asList(services));
+            }
+
+            public AuthorizationServiceBuilder services(List<RedirectionBasedGrantService> services) {
+                this.services.addAll(services);
                 return this;
             }
 
-            public AuthorizationCodeBuilder skipAuthorizationWithOidcScope(boolean skip) {
-                OidcServerBuilder.this.skipAuthorizationWithOidcScope = skip;
+            public AuthorizationServiceBuilder scopesRequiringNoConsent(String... scopesRequiringNoConsent) {
+                this.scopesRequiringNoConsent = new ArrayList<String>(Arrays.asList(scopesRequiringNoConsent));
                 return this;
             }
 
-            public AuthorizationCodeBuilder supportedClaims(Map<String, String> supportedClaims) {
-                OidcServerBuilder.this.supportedClaims = supportedClaims;
+            public AuthorizationServiceBuilder skipAuthorizationWithOidcScope(boolean skip) {
+                this.skipAuthorizationWithOidcScope = skip;
                 return this;
             }
 
-            public OidcServerBuilder and() {
-                return OidcServerBuilder.this;
+            public IdpEndpointBuilder and() {
+                return IdpEndpointBuilder.this;
+            }
+        }
+
+        public class LogoutServiceBuilder {
+
+            private LogoutService logoutService;
+
+            private List<LogoutHandler> logoutHandlers = new ArrayList<>();
+
+            private BackChannelLogoutHandler backChannelLogoutHandler;
+
+            public LogoutServiceBuilder custom(LogoutService logoutService) {
+                this.logoutService = logoutService;
+                return this;
+            }
+
+            public LogoutServiceBuilder logoutHandlers(LogoutHandler... handlers) {
+                return logoutHandlers(Arrays.asList(handlers));
+            }
+
+            public LogoutServiceBuilder logoutHandlers(List<LogoutHandler> handlers) {
+                this.logoutHandlers.addAll(handlers);
+                return this;
+            }
+
+            public LogoutServiceBuilder backChannelLogoutHandler(BackChannelLogoutHandler backChannelLogoutHandler) {
+                this.backChannelLogoutHandler = backChannelLogoutHandler;
+                return this;
+            }
+
+            public IdpEndpointBuilder and() {
+                return IdpEndpointBuilder.this;
             }
         }
     }

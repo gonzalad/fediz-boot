@@ -40,7 +40,7 @@ public class WebSecurityConfig extends AuthorizationServerConfigurerAdapter {
                 .clientRegistration().clients(clients())
                 .and()
                 .idp()
-                .authorizationCode()
+                .authorizationService()
                 .scopesRequiringNoConsent("openid", "refreshToken");
     }
 

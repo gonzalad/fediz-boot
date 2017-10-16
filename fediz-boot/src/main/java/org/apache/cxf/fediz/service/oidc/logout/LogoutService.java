@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -45,6 +44,10 @@ import org.apache.cxf.rs.security.oauth2.utils.OAuthConstants;
 import org.apache.cxf.rs.security.oidc.common.IdToken;
 import org.apache.cxf.rs.security.oidc.idp.OidcUserSubject;
 
+/**
+ * This logout service implements back channel logout http://openid.net/specs/openid-connect-session-1_0.html
+ * and redirects back to Application Client post_logout_redirect_uri.
+ */
 @Path("/logout")
 public class LogoutService extends JoseJwtConsumer {
     private static final String CLIENT_LOGOUT_URI = "post_logout_redirect_uri";
@@ -53,7 +56,6 @@ public class LogoutService extends JoseJwtConsumer {
 
     @Context
     private MessageContext mc;
-    private String relativeIdpLogoutUri;
     private OAuthDataProvider dataProvider;
     private FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
     private BackChannelLogoutHandler backChannelLogoutHandler;
@@ -86,11 +88,15 @@ public class LogoutService extends JoseJwtConsumer {
         // Clear OIDC session now
         mc.getHttpServletRequest().getSession().invalidate();
 
-        // Redirect to the core IDP
-        URI idpLogoutUri = getAbsoluteIdpLogoutUri(client, params);
-        return Response.seeOther(idpLogoutUri).build();
+        return redirect(client, params);
     }
 
+    /**
+     * Redirects to Client Application once logout is finished
+     */
+    protected Response redirect(Client client, MultivaluedMap<String, String> params) {
+        return Response.seeOther(getClientLogoutUri(client, params)).build();
+    }
 
     private IdToken getIdTokenHint(MultivaluedMap<String, String> params) {
         String tokenHint = params.getFirst(ID_TOKEN_HINT);
@@ -105,7 +111,8 @@ public class LogoutService extends JoseJwtConsumer {
         }
         return new IdToken(token.getClaims());
     }
-    private URI getClientLogoutUri(Client client, MultivaluedMap<String, String> params) {
+
+    protected URI getClientLogoutUri(Client client, MultivaluedMap<String, String> params) {
         String logoutUriProp = client.getProperties().get(CLIENT_LOGOUT_URIS);
         // logoutUriProp is guaranteed to be not null at this point
         String[] uris = logoutUriProp.split(" ");
@@ -149,17 +156,6 @@ public class LogoutService extends JoseJwtConsumer {
         }
         return c;
     }
-    private URI getAbsoluteIdpLogoutUri(Client client, MultivaluedMap<String, String> params) {
-        UriBuilder ub = mc.getUriInfo().getAbsolutePathBuilder();
-        ub.path(relativeIdpLogoutUri);
-        ub.queryParam("wreply", getClientLogoutUri(client, params));
-        ub.queryParam(OAuthConstants.CLIENT_ID, client.getClientId());
-        return ub.build().normalize();
-    }
-
-    public void setRelativeIdpLogoutUri(String relativeIdpLogoutUri) {
-        this.relativeIdpLogoutUri = relativeIdpLogoutUri;
-    }
 
     public void setLogoutHandlers(List<LogoutHandler> logoutHandlers) {
         this.logoutHandlers = logoutHandlers;
@@ -181,5 +177,9 @@ public class LogoutService extends JoseJwtConsumer {
         if (backChannelLogoutHandler != null) {
             backChannelLogoutHandler.close();
         }
+    }
+
+    protected MessageContext getMessageContext() {
+        return mc;
     }
 }

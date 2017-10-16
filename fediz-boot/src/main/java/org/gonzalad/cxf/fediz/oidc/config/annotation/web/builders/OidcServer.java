@@ -31,7 +31,7 @@ public class OidcServer {
 
     public void setBasePath(String basePath) {
         this.basePath = basePath != null ? basePath : "";
-//        if (!this.basePath.isEmpty() && !this.basePath.endsWith("/")) {
+        //        if (!this.basePath.isEmpty() && !this.basePath.endsWith("/")) {
 //            this.basePath += "/";
 //        }
     }
