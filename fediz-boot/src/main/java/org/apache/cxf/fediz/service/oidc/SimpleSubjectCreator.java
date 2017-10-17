@@ -18,7 +18,7 @@ public class SimpleSubjectCreator implements ClaimsMapper {
         // Map claims
         List<String> roles = authentication.getAuthorities().stream().map(it -> it.getAuthority()).collect(Collectors.toList());
         if (!roles.isEmpty()) {
-            claims.put(FedizSubjectCreator.ROLES_CLAIMS, roles);
+            claims.put(FedizSubjectCreator.ROLES_CLAIM, roles);
         }
         return claims;
     }

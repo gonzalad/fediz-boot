@@ -9,6 +9,7 @@ import org.apache.cxf.fediz.core.Claim;
 import org.apache.cxf.fediz.core.ClaimTypes;
 import org.apache.cxf.fediz.core.FedizPrincipal;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException;
+import org.apache.cxf.rs.security.oidc.common.IdToken;
 import org.apache.wss4j.common.ext.WSSecurityException;
 import org.apache.wss4j.common.saml.SamlAssertionWrapper;
 import org.joda.time.DateTime;
@@ -68,11 +69,11 @@ public class SAMLClaimsProvider implements ClaimsMapper {
     	// The typed checks can be dropped if we say all the mappings 
     	// must be set in supportedClaims
     	if (ClaimTypes.FIRSTNAME.equals(samlClaimType)) {
-            return "first_name";
+            return IdToken.GIVEN_NAME_CLAIM;
         } else if (ClaimTypes.LASTNAME.equals(samlClaimType)) {
-            return "surname";
+            return IdToken.FAMILY_NAME_CLAIM;
         } else if (ClaimTypes.EMAILADDRESS.equals(samlClaimType)) {
-            return "email";
+            return IdToken.EMAIL_CLAIM;
         } else {
             return supportedClaims.get(samlClaimType);
         }

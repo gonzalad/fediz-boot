@@ -41,7 +41,7 @@ import org.apache.cxf.rs.security.oidc.utils.OidcUtils;
 
 
 public class FedizSubjectCreator implements SubjectCreator {
-    public static final String ROLES_CLAIMS = "roles";
+    public static final String ROLES_CLAIM = "roles";
     private static final String ROLES_SCOPE = "roles";
     private boolean stripPathFromIssuerUri;
     private String issuer;
@@ -179,13 +179,13 @@ public class FedizSubjectCreator implements SubjectCreator {
                 if (!(c.getValue() instanceof String)) {
                     continue;
                 }
-                if ("first_name".equals(c.getKey())) {
+                if (IdToken.GIVEN_NAME_CLAIM.equals(c.getKey())) {
                 	firstName = (String) c.getValue();
                 	idToken.setGivenName(firstName);
-                } else if ("family_name".equals(c.getKey())) {
+                } else if (IdToken.FAMILY_NAME_CLAIM.equals(c.getKey())) {
                 	lastName = (String) c.getValue(); 
                     idToken.setFamilyName(lastName);
-                } else if ("email".equals(c.getKey())) {
+                } else if (IdToken.EMAIL_CLAIM.equals(c.getKey())) {
                     idToken.setEmail((String) c.getValue());
                 } else if (requestedClaimsList.contains(c.getKey())) {
                     idToken.setClaim(c.getKey(), c.getValue());
@@ -202,7 +202,7 @@ public class FedizSubjectCreator implements SubjectCreator {
 
     private List<String> getCustomScopeClaims(String[] scopes) {
         if (Arrays.asList(scopes).contains(ROLES_SCOPE)) {
-            return Collections.singletonList("roles");
+            return Collections.singletonList(ROLES_CLAIM);
         } else {
             return Collections.emptyList();
         }
