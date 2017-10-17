@@ -1,5 +1,13 @@
 package org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders;
 
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_PSWD;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_ALIAS;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_FILE;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_PSWD;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_TYPE;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_INCLUDE_KEY_ID;
+import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_KEY_PSWD_PROVIDER;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,13 +56,6 @@ import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.FedizOidc
 import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.ViewResolver;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_PSWD;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_ALIAS;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_FILE;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_PSWD;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_KEY_STORE_TYPE;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_INCLUDE_KEY_ID;
-import static org.apache.cxf.rs.security.jose.common.JoseConstants.RSSEC_SIGNATURE_KEY_PSWD_PROVIDER;
 
 /**
  * @author agonzalez
@@ -93,8 +94,6 @@ public class OidcServerBuilder {
     private boolean tokenIntrospectionDisabled;
 
     private AuthorizationService authorizationService;
-
-    private Map<String, String> supportedClaims = Collections.emptyMap();
 
     private OAuth2EndpointBuilder oAuth2EndpointBuilder;
 
@@ -438,7 +437,6 @@ public class OidcServerBuilder {
         // TODO be able to configure idToken expiration
         FedizSubjectCreator subjectCreator = new FedizSubjectCreator();
         subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
-        subjectCreator.setSupportedClaims(supportedClaims);
         subjectCreator.setStripPathFromIssuerUri(true);
         if (claimsProvider != null) {
             subjectCreator.setClaimsProvider(claimsProvider);
@@ -835,11 +833,6 @@ public class OidcServerBuilder {
 
         public IdpEndpointBuilder claimsProvider(ClaimsMapper claimsProvider) {
             OidcServerBuilder.this.claimsProvider = claimsProvider;
-            return this;
-        }
-
-        public IdpEndpointBuilder supportedClaims(Map<String, String> supportedClaims) {
-            OidcServerBuilder.this.supportedClaims = supportedClaims;
             return this;
         }
 

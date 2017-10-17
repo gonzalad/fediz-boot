@@ -26,12 +26,11 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
 
-import org.apache.cxf.fediz.core.ClaimTypes;
-import org.apache.cxf.fediz.core.FedizConstants;
 import org.apache.cxf.jaxrs.ext.MessageContext;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException;
 import org.apache.cxf.rs.security.oauth2.provider.SubjectCreator;
@@ -47,8 +46,7 @@ public class FedizSubjectCreator implements SubjectCreator {
     private boolean stripPathFromIssuerUri;
     private String issuer;
     private long defaultTimeToLive = 3600L;
-    private Map<String, String> supportedClaims = Collections.emptyMap();
-
+    
     /**
      * TODO add SimpleClaimsMapper
      */
@@ -181,32 +179,20 @@ public class FedizSubjectCreator implements SubjectCreator {
                 if (!(c.getValue() instanceof String)) {
                     continue;
                 }
-                // TODO : change SAML names to oidc names
-                if (ClaimTypes.FIRSTNAME.equals(c.getKey())) {
-                    idToken.setGivenName((String) c.getValue());
-                    firstName = (String) c.getValue();
-                } else if (ClaimTypes.LASTNAME.equals(c.getKey())) {
-                    idToken.setFamilyName((String) c.getValue());
-                    lastName = (String) c.getValue();
-                } else if (ClaimTypes.EMAILADDRESS.equals(c.getKey())) {
+                if ("first_name".equals(c.getKey())) {
+                	firstName = (String) c.getValue();
+                	idToken.setGivenName(firstName);
+                } else if ("family_name".equals(c.getKey())) {
+                	lastName = (String) c.getValue(); 
+                    idToken.setFamilyName(lastName);
+                } else if ("email".equals(c.getKey())) {
                     idToken.setEmail((String) c.getValue());
-                } else if (supportedClaims.containsKey(c.getKey().toString())
-                        && requestedClaimsList.contains(supportedClaims.get(c.getKey().toString()))) {
-                    idToken.setClaim(supportedClaims.get(c.getKey().toString()), c.getValue());
+                } else if (requestedClaimsList.contains(c.getKey())) {
+                    idToken.setClaim(c.getKey(), c.getValue());
                 }
             }
             if (firstName != null && lastName != null) {
                 idToken.setName(firstName + " " + lastName);
-            }
-        }
-
-        List<Object> roles = (List<Object>) claims.get(ROLES_CLAIMS);
-        if (roles != null && !roles.isEmpty()
-                && supportedClaims.containsKey(FedizConstants.DEFAULT_ROLE_URI.toString())) {
-
-            String roleClaimName = supportedClaims.get(FedizConstants.DEFAULT_ROLE_URI.toString());
-            if (requestedClaimsList.contains(roleClaimName)) {
-                idToken.setClaim(roleClaimName, roles);
             }
         }
 
@@ -215,15 +201,11 @@ public class FedizSubjectCreator implements SubjectCreator {
 
 
     private List<String> getCustomScopeClaims(String[] scopes) {
-        // For now the only custom scope (to claims) mapping Fediz supports is
-        // roles where the scope name is expected to be 'roles' and the role name must be configured
-        String roleClaimName = supportedClaims.get(FedizConstants.DEFAULT_ROLE_URI.toString());
-        if (roleClaimName != null && Arrays.asList(scopes).contains(ROLES_SCOPE)) {
-            return Collections.singletonList(roleClaimName);
+        if (Arrays.asList(scopes).contains(ROLES_SCOPE)) {
+            return Collections.singletonList("roles");
         } else {
             return Collections.emptyList();
         }
-
     }
 
     public void setIdTokenIssuer(String idTokenIssuer) {
@@ -233,17 +215,6 @@ public class FedizSubjectCreator implements SubjectCreator {
 
     public void setIdTokenTimeToLive(long idTokenTimeToLive) {
         this.defaultTimeToLive = idTokenTimeToLive;
-    }
-
-    /**
-     * Set a map of supported claims. The map is from a SAML ClaimType URI String to a claim value that is
-     * sent in the claims parameter. So for example:
-     * http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role -> role
-     * If the token contains a the former, and the OpenId claims contains the latter, then the claim value
-     * will be encoded in the IdToken using the latter key.
-     */
-    public void setSupportedClaims(Map<String, String> supportedClaims) {
-        this.supportedClaims = supportedClaims;
     }
 
     public void setStripPathFromIssuerUri(boolean stripPathFromIssuerUri) {

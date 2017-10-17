@@ -1,10 +1,12 @@
 package org.apache.cxf.fediz.service.oidc;
 
 import java.security.Principal;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.cxf.fediz.core.Claim;
+import org.apache.cxf.fediz.core.ClaimTypes;
 import org.apache.cxf.fediz.core.FedizPrincipal;
 import org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException;
 import org.apache.wss4j.common.ext.WSSecurityException;
@@ -15,6 +17,8 @@ import org.w3c.dom.Element;
 
 public class SAMLClaimsProvider implements ClaimsMapper {
 
+	private Map<String, String> supportedClaims = Collections.emptyMap();
+	
     @Override
     public Map<String, Object> extract(Principal principal) {
         FedizPrincipal fedizPrincipal = (FedizPrincipal) principal;
@@ -50,7 +54,10 @@ public class SAMLClaimsProvider implements ClaimsMapper {
                 if (!(c.getValue() instanceof String)) {
                     continue;
                 }
-                claims.put(mapClaimName(c.getClaimType().toString()), c.getValue());
+                String mappedName = mapClaimName(c.getClaimType().toString());
+                if (mappedName != null) {
+                    claims.put(mappedName, c.getValue());
+                }
             }
         }
 
@@ -58,7 +65,17 @@ public class SAMLClaimsProvider implements ClaimsMapper {
     }
 
     private String mapClaimName(String samlClaimType) {
-        return samlClaimType;
+    	// The typed checks can be dropped if we say all the mappings 
+    	// must be set in supportedClaims
+    	if (ClaimTypes.FIRSTNAME.equals(samlClaimType)) {
+            return "first_name";
+        } else if (ClaimTypes.LASTNAME.equals(samlClaimType)) {
+            return "surname";
+        } else if (ClaimTypes.EMAILADDRESS.equals(samlClaimType)) {
+            return "email";
+        } else {
+            return supportedClaims.get(samlClaimType);
+        }
     }
 
     @Override
@@ -74,5 +91,24 @@ public class SAMLClaimsProvider implements ClaimsMapper {
         } catch (WSSecurityException ex) {
             throw new OAuthServiceException("Error converting SAML token", ex);
         }
+    }
+    
+    /**
+     * Set a map of supported claims. The map is from a SAML ClaimType URI String to a claim value that is
+     * sent in the claims parameter. So for example:
+     * http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role -> role
+     * If the token contains a the former, and the OpenId claims contains the latter, then the claim value
+     * will be encoded in the IdToken using the latter key.
+     */
+    public void setSupportedClaims(Map<String, String> supportedClaims) {
+        this.supportedClaims = supportedClaims;
+        //<util:map id="supportedClaims">
+        // <!-- we only need the below 3 mappings if we drop the typed checks in mapClaimName(String)
+        //  <entry key="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname" value="given_name" />
+        //  <entry key="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname" value="family_name" />
+        //  <entry key="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress" value="email" />
+        // -->
+        //  <entry key="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/role" value="roles" />
+        //</util:map> 
     }
 }
