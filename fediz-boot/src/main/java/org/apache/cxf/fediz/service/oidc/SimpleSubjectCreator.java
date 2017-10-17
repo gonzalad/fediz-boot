@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.security.core.Authentication;
 
-public class SimpleSubjectCreator implements ClaimsProvider {
+public class SimpleSubjectCreator implements ClaimsMapper {
 
     @Override
     public Map<String, Object> extract(Principal principal) {

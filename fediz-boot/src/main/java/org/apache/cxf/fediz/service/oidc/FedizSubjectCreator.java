@@ -52,13 +52,13 @@ public class FedizSubjectCreator implements SubjectCreator {
     /**
      * TODO add SimpleClaimsMapper
      */
-    private List<ClaimsProvider> claimsProviders = Arrays.asList(new SAMLClaimsProvider(), new SimpleSubjectCreator());
+    private List<ClaimsMapper> claimsProviders = Arrays.asList(new SAMLClaimsProvider(), new SimpleSubjectCreator());
 
     @Override
     public OidcUserSubject createUserSubject(MessageContext mc,
                                              MultivaluedMap<String, String> params) throws OAuthServiceException {
         Principal principal = mc.getSecurityContext().getUserPrincipal();
-        ClaimsProvider claimsProvider = retrieveClaimsProvider(principal, mc.getHttpServletRequest());
+        ClaimsMapper claimsProvider = retrieveClaimsProvider(principal, mc.getHttpServletRequest());
 
         // In the future FedizPrincipal will likely have JWT claims already prepared,
         // with IdToken being initialized here from those claims
@@ -80,16 +80,16 @@ public class FedizSubjectCreator implements SubjectCreator {
         return oidcSub;
     }
 
-    private ClaimsProvider retrieveClaimsProvider(Principal principal, HttpServletRequest request) {
+    private ClaimsMapper retrieveClaimsProvider(Principal principal, HttpServletRequest request) {
 
         // in case a custom authenticationProvider adds its own claimsProvider
         // i.e. custom authenticationProvider handles both authentication and claimsProvider
-        ClaimsProvider claimsProvider = (ClaimsProvider) request.getAttribute("claimsProvider");
+        ClaimsMapper claimsProvider = (ClaimsMapper) request.getAttribute("claimsProvider");
         if (claimsProvider != null) {
             return claimsProvider;
         }
 
-        for (ClaimsProvider provider : claimsProviders) {
+        for (ClaimsMapper provider : claimsProviders) {
             if (provider.supports(principal)) {
                 return provider;
             }
@@ -250,11 +250,11 @@ public class FedizSubjectCreator implements SubjectCreator {
         this.stripPathFromIssuerUri = stripPathFromIssuerUri;
     }
 
-    public void setClaimsProvider(ClaimsProvider claimsProvider) {
+    public void setClaimsProvider(ClaimsMapper claimsProvider) {
         setClaimsProviders(Collections.singletonList(claimsProvider));
     }
 
-    public void setClaimsProviders(List<ClaimsProvider> claimsProvider) {
+    public void setClaimsProviders(List<ClaimsMapper> claimsProvider) {
         this.claimsProviders = claimsProvider;
     }
 }

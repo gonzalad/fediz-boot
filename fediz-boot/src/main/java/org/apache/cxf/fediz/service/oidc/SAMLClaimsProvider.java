@@ -13,7 +13,7 @@ import org.joda.time.DateTime;
 import org.opensaml.saml.saml2.core.Assertion;
 import org.w3c.dom.Element;
 
-public class SAMLClaimsProvider implements ClaimsProvider {
+public class SAMLClaimsProvider implements ClaimsMapper {
 
     @Override
     public Map<String, Object> extract(Principal principal) {

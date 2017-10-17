@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.cxf.Bus;
-import org.apache.cxf.fediz.service.oidc.ClaimsProvider;
+import org.apache.cxf.fediz.service.oidc.ClaimsMapper;
 import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
 import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
@@ -110,7 +110,7 @@ public class OidcServerBuilder {
 
     private FedizOidcServerProperties serverProperties;
 
-    private ClaimsProvider claimsProvider;
+    private ClaimsMapper claimsProvider;
 
     private List<String> grants = new ArrayList<>(Defaults.grants());
 
@@ -833,7 +833,7 @@ public class OidcServerBuilder {
             return this;
         }
 
-        public IdpEndpointBuilder claimsProvider(ClaimsProvider claimsProvider) {
+        public IdpEndpointBuilder claimsProvider(ClaimsMapper claimsProvider) {
             OidcServerBuilder.this.claimsProvider = claimsProvider;
             return this;
         }
