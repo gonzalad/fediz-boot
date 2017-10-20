@@ -22,11 +22,14 @@ import org.apache.cxf.fediz.service.oidc.ClaimsMapper;
 import org.apache.cxf.fediz.service.oidc.FedizSubjectCreator;
 import org.apache.cxf.fediz.service.oidc.OAuthDataProviderImpl;
 import org.apache.cxf.fediz.service.oidc.PrivateKeyPasswordProviderImpl;
+import org.apache.cxf.fediz.service.oidc.clients.ClientRegistrationService;
+import org.apache.cxf.fediz.service.oidc.console.UserConsoleService;
 import org.apache.cxf.fediz.service.oidc.logout.BackChannelLogoutHandler;
 import org.apache.cxf.fediz.service.oidc.logout.LogoutHandler;
 import org.apache.cxf.fediz.service.oidc.logout.LogoutService;
 import org.apache.cxf.fediz.service.oidc.logout.TokenCleanupHandler;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
+import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
 import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
@@ -48,6 +51,7 @@ import org.apache.cxf.rs.security.oauth2.services.TokenIntrospectionService;
 import org.apache.cxf.rs.security.oidc.idp.IdTokenResponseFilter;
 import org.apache.cxf.rs.security.oidc.idp.OidcAuthorizationCodeService;
 import org.apache.cxf.rs.security.oidc.idp.OidcConfigurationService;
+import org.apache.cxf.rs.security.oidc.idp.OidcDynamicRegistrationService;
 import org.apache.cxf.rs.security.oidc.idp.OidcHybridService;
 import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
 import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
@@ -105,6 +109,12 @@ public class OidcServerBuilder {
 
     private DiscoveryEndpointBuilder discoveryEndpointBuilder;
 
+    private UserInfoEndpointBuilder userInfoEndpointBuilder;
+
+    private UserConsoleEndpointBuilder userConsoleEndpointBuilder;
+
+    private DynamicClientRegistrationEndpoint dynamicClientRegistrationEndpoint;
+
     private CxfBuilder cxfBuilder = new CxfBuilder();
 
     private FedizOidcServerProperties serverProperties;
@@ -128,6 +138,9 @@ public class OidcServerBuilder {
         this.jwkEndpointBuilder = new JwkEndpointBuilder();
         this.idpEndpointBuilder = new IdpEndpointBuilder();
         this.discoveryEndpointBuilder = new DiscoveryEndpointBuilder();
+        this.userInfoEndpointBuilder = new UserInfoEndpointBuilder();
+        this.userConsoleEndpointBuilder = new UserConsoleEndpointBuilder();
+        this.dynamicClientRegistrationEndpoint = new DynamicClientRegistrationEndpoint();
     }
 
     public CxfBuilder cxf() {
@@ -135,9 +148,18 @@ public class OidcServerBuilder {
         return cxfBuilder;
     }
 
+    public UserInfoEndpointBuilder userInfo() {
+         return userInfoEndpointBuilder;
+    }
+
     public OAuth2EndpointBuilder oauth2() {
         // be cautious : handle reentrancy...
         return oAuth2EndpointBuilder;
+    }
+
+    public UserConsoleEndpointBuilder console() {
+        // be cautious : handle reentrancy...
+        return userConsoleEndpointBuilder;
     }
 
     public IdpEndpointBuilder idp() {
@@ -181,16 +203,14 @@ public class OidcServerBuilder {
         OidcServer oidcServer = new OidcServer();
         oidcServer.setBus(cxfBuilder.bus);
         oidcServer.setBasePath(serverProperties.getBasePath());
-        oidcServer.setAuthDataProvider(oauthDataProvider);
         oidcServer.setOAuth2Endpoint(buildOAuth2Endpoint());
         oidcServer.setDiscoveryEndpoint(buildDiscoveryEndpoint());
-//        oidcServer.setLogoutEndpoint(buildLogoutEndpoint());
         oidcServer.setJwkEndpoint(buildJwkEndpoint());
         oidcServer.setUserInfoEndpoint(buildUserInfoEndpoint());
         oidcServer.setIdpEndpoint(buildIdpEndpoint());
-        oidcServer.setClientRegistrationProvider(buildClientRegistrationProvider());
-//        oidcServer.setDynamicClientRegistrationEndpoint(oauthDataProvider);
-//        oidcServer.setUserConsole(oauthDataProvider);
+//        oidcServer.setClientRegistrationProvider(buildClientRegistrationProvider());
+        oidcServer.setUserConsoleEndpoint(buildUserConsoleEndpoint());
+        oidcServer.setDynamicClientRegistrationEndpoint(buildDynamicClientRegistrationEndpoint());
 //        oidcServer.setAdditionalEndpoints(endpoints);
         return oidcServer;
     }
@@ -234,19 +254,44 @@ public class OidcServerBuilder {
     }
 
     private JAXRSServerFactoryBean buildDiscoveryEndpoint() {
-        buildKeyManagementProperties(oAuth2EndpointBuilder);
         return buildEndpoint(discoveryEndpointBuilder, buildDiscoveryService());
     }
 
     private JAXRSServerFactoryBean buildUserInfoEndpoint() {
-        EndpointBuilder endpointBuilder = new EndpointBuilder<>(this);
-        endpointBuilder.address("/users");
-        buildKeyManagementProperties(endpointBuilder);
         List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonMapObjectProvider());
-        UserInfoService userInfoService = new UserInfoService();
-        userInfoService.setOauthDataProvider(oauthDataProvider);
-        userInfoService.setJwsRequired(false);
-        return buildEndpoint(endpointBuilder, userInfoService, Collections.emptyMap(), defaultProviders);
+        UserInfoService userInfoService = buildUserInfoService();
+        return buildEndpoint(userInfoEndpointBuilder, userInfoService, Collections.emptyMap(), defaultProviders);
+    }
+
+    private JAXRSServerFactoryBean buildUserConsoleEndpoint() {
+        List<Object> defaultProviders = Arrays.asList(defaultViewProvider());
+        UserConsoleService userInfoService = buildUserConsoleService();
+        return buildEndpoint(userConsoleEndpointBuilder, userInfoService, Collections.emptyMap(), defaultProviders);
+    }
+
+    private JAXRSServerFactoryBean buildDynamicClientRegistrationEndpoint() {
+        List<Object> defaultProviders = Arrays.asList(new JsonMapObjectProvider());
+        OidcDynamicRegistrationService registrationService = buildDynamicClientRegistrationService();
+        return buildEndpoint(dynamicClientRegistrationEndpoint, registrationService, Collections.emptyMap(), defaultProviders);
+    }
+
+    private UserConsoleService buildUserConsoleService() {
+        UserConsoleService userConsoleService = userConsoleEndpointBuilder.userConsoleService;
+        if (!userConsoleEndpointBuilder.custom) {
+            userConsoleService.getClientRegService().setDataProvider(oauthDataProvider);
+            // TODO : rething the build part because we're either building multiple clientRegistrationProvider
+            // or creating multiple times the same clients as of now
+            ClientRegistrationProvider clientRegistrationProvider = buildClientRegistrationProvider();
+            userConsoleService.getClientRegService().setClientProvider(clientRegistrationProvider);
+            if (!userConsoleEndpointBuilder.customClientRegistrationService) {
+                userConsoleService.getClientRegService().setHomeRealms(clientRegistrationProviderBuilder.homeRealms.stream().collect(Collectors.toMap(it -> it, it -> it)));
+            }
+        }
+        return userConsoleService;
+    }
+
+    private OidcDynamicRegistrationService buildDynamicClientRegistrationService() {
+        return dynamicClientRegistrationEndpoint.dynamicRegistrationService;
     }
 
     private Object buildOAuthJsonProvider() {
@@ -268,9 +313,10 @@ public class OidcServerBuilder {
     }
 
     private UserInfoService buildUserInfoService() {
-        UserInfoService userInfoService = new UserInfoService();
-        userInfoService.setOauthDataProvider(oauthDataProvider);
-        userInfoService.setJwsRequired(false);
+        UserInfoService userInfoService = userInfoEndpointBuilder.userInfoService;
+        if (!userInfoEndpointBuilder.custom) {
+            userInfoService.setOauthDataProvider(oauthDataProvider);
+        }
         return userInfoService;
     }
 
@@ -325,6 +371,8 @@ public class OidcServerBuilder {
             backChannelLogoutHandler.setDataProvider(this.oauthDataProvider);
             logoutService.setBackChannelLogoutHandler(backChannelLogoutHandler);
         }
+        logoutService.setDataProvider(oauthDataProvider);
+        logoutService.setSubjectCreator(buildSubjectCreator());
         if (logoutBuilder.logoutHandlers.size() > 0) {
             logoutService.setLogoutHandlers(logoutBuilder.logoutHandlers);
         } else {
@@ -338,6 +386,8 @@ public class OidcServerBuilder {
     private JAXRSServerFactoryBean buildJwkEndpoint() {
         buildKeyManagementProperties(jwkEndpointBuilder);
         List<Object> defaultProviders = Arrays.asList(corsFilter(), new JsonWebKeysProvider());
+        OidcKeysService keyService = new OidcKeysService();
+        keyService.setKeyServiceClient(jwkEndpointBuilder.keyServiceClient);
         return buildEndpoint(jwkEndpointBuilder, new OidcKeysService(), Collections.emptyMap(), defaultProviders);
     }
 
@@ -422,14 +472,18 @@ public class OidcServerBuilder {
     }
 
     private OidcConfigurationService buildDiscoveryService() {
-        return new OidcConfigurationService();
+        OidcConfigurationService configurationService = this.discoveryEndpointBuilder.configurationService;
+//        if (!discoveryEndpointBuilder.custom) {
+//            configurationService.
+//        }
+        return configurationService;
     }
 
     private IdTokenResponseFilter buildIdTokenResponseFilter() {
         return new IdTokenResponseFilter();
     }
 
-    private SubjectCreator buildSubjectCreator() {
+    private FedizSubjectCreator buildSubjectCreator() {
 //        LocalSubjectCreator subjectCreator = new LocalSubjectCreator();
 //        subjectCreator.setIdTokenIssuer(serverProperties.getIssuer());
 //        subjectCreator.setSupportedClaims(supportedClaims);
@@ -479,6 +533,15 @@ public class OidcServerBuilder {
         }
         accessTokenService.setGrantHandlers(grantHandlers);
         return accessTokenService;
+    }
+
+    private Object defaultViewProvider() {
+        SpringViewResolverProvider viewProvider = new SpringViewResolverProvider(OidcServerBuilder.this.viewResolver, localeResolver);
+        viewProvider.setUseClassNames(true);
+        viewProvider.setBeanName("model");
+        viewProvider.setResourcePaths(Collections.singletonMap("/remove", "registeredClients"));
+        viewProvider.setClassResources(Collections.singletonMap("org.apache.cxf.fediz.service.oidc.clients.InvalidRegistration", "invalidRegistration"));
+        return viewProvider;
     }
 
     private static class Defaults {
@@ -555,17 +618,157 @@ public class OidcServerBuilder {
 
     public class JwkEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
 
+        private WebClient keyServiceClient;
+
         public JwkEndpointBuilder() {
             super(OidcServerBuilder.this);
             super.address = "/jwk";
+        }
+
+        public JwkEndpointBuilder keyServiceClient(WebClient keyServiceClient) {
+            this.keyServiceClient = keyServiceClient;
+            return this;
+        }
+    }
+
+    public class UserInfoEndpointBuilder extends EndpointBuilder<OidcServerBuilder, UserInfoEndpointBuilder> {
+
+        private UserInfoService userInfoService = new UserInfoService();
+        private boolean custom;
+
+        public UserInfoEndpointBuilder() {
+            super(OidcServerBuilder.this);
+            super.address = "/users";
+        }
+
+        public UserInfoEndpointBuilder custom(UserInfoService userInfoService) {
+            this.userInfoService = userInfoService;
+            custom = true;
+            return this;
+        }
+
+        public UserInfoEndpointBuilder jwsRequired(boolean jwsRequired) {
+            this.userInfoService.setJwsRequired(jwsRequired);
+            return this;
+        }
+
+        public UserInfoEndpointBuilder jweRequired(boolean jweRequired) {
+            this.userInfoService.setJweRequired(jweRequired);
+            return this;
+        }
+    }
+
+    public class UserConsoleEndpointBuilder extends EndpointBuilder<OidcServerBuilder, UserConsoleEndpointBuilder> {
+
+        private UserConsoleService userConsoleService;
+        private boolean custom;
+        private boolean customClientRegistrationService;
+
+        public UserConsoleEndpointBuilder() {
+            super(OidcServerBuilder.this);
+            super.address = "/console";
+            this.userConsoleService = new UserConsoleService();
+            this.userConsoleService.setClientRegService(new ClientRegistrationService());
+        }
+
+        public UserConsoleEndpointBuilder custom(UserConsoleService userConsoleService) {
+            this.userConsoleService = userConsoleService;
+            custom = true;
+            return this;
+        }
+
+        public UserConsoleEndpointBuilder clientRegistrationService(
+                ClientRegistrationService clientRegistrationService) {
+            this.userConsoleService.setClientRegService(clientRegistrationService);
+            this.customClientRegistrationService = true;
+            return this;
+        }
+
+        public UserConsoleEndpointBuilder additionalTLDs(List<String> additionalTLDs) {
+            userConsoleService.getClientRegService().setAdditionalTLDs(additionalTLDs);
+            return this;
+        }
+
+        public UserConsoleEndpointBuilder userRole(String userRole) {
+            userConsoleService.getClientRegService().setUserRole(userRole);
+            return this;
+        }
+
+        public UserConsoleEndpointBuilder clientScopes(List<String> clientScopes) {
+            userConsoleService.getClientRegService().setClientScopes(clientScopes.stream().collect(Collectors.toMap(it -> it, it -> it)));
+            return this;
+        }
+
+        public UserConsoleEndpointBuilder protectIdTokenWithClientSecret(boolean protectIdTokenWithClientSecret) {
+            userConsoleService.getClientRegService().setProtectIdTokenWithClientSecret(protectIdTokenWithClientSecret);
+            return this;
+        }
+    }
+
+    public class DynamicClientRegistrationEndpoint extends EndpointBuilder<OidcServerBuilder, DynamicClientRegistrationEndpoint> {
+
+        private OidcDynamicRegistrationService dynamicRegistrationService;
+        private boolean custom;
+
+        public DynamicClientRegistrationEndpoint() {
+            super(OidcServerBuilder.this);
+            super.address = "/connect";
+            this.dynamicRegistrationService = new OidcDynamicRegistrationService();
+        }
+
+        public DynamicClientRegistrationEndpoint custom(OidcDynamicRegistrationService dynamicRegistrationService) {
+            this.dynamicRegistrationService = dynamicRegistrationService;
+            custom = true;
+            return this;
+        }
+
+        public DynamicClientRegistrationEndpoint protectIdTokenWithClientSecret(
+                boolean protectIdTokenWithClientSecret) {
+            this.dynamicRegistrationService.setProtectIdTokenWithClientSecret(protectIdTokenWithClientSecret);
+            return this;
+        }
+
+        public DynamicClientRegistrationEndpoint userRole(String userRole) {
+            this.dynamicRegistrationService.setUserRole(userRole);
+            return this;
+        }
+
+        public DynamicClientRegistrationEndpoint initialAccessToken(String initialAccessToken) {
+            this.dynamicRegistrationService.setInitialAccessToken(initialAccessToken);
+            return this;
         }
     }
 
     public class DiscoveryEndpointBuilder extends EndpointBuilder<OidcServerBuilder, JwkEndpointBuilder> {
 
+        private OidcConfigurationService configurationService = new OidcConfigurationService();
+        private boolean custom;
+
         public DiscoveryEndpointBuilder() {
             super(OidcServerBuilder.this);
             super.address = "/.well-known";
+        }
+
+        public DiscoveryEndpointBuilder custom(OidcConfigurationService configurationService) {
+            this.configurationService = configurationService;
+            this.custom = true;
+            return this;
+        }
+
+        public DiscoveryEndpointBuilder backChannelLogoutSupported(boolean backChannelLogoutSupported) {
+            this.configurationService.setBackChannelLogoutSupported(backChannelLogoutSupported);
+            return this;
+        }
+
+        public DiscoveryEndpointBuilder dynamicRegistrationEndpointSupported(
+                boolean dynamicRegistrationEndpointSupported) {
+            this.configurationService.setDynamicRegistrationEndpointNotAvailable(!dynamicRegistrationEndpointSupported);
+            return this;
+        }
+
+        public DiscoveryEndpointBuilder tokenRevocationEndpointSupported(boolean tokenRevocationEndpointSupported) {
+            this.configurationService.setTokenRevocationEndpointNotAvailable(!tokenRevocationEndpointSupported);
+            return this;
         }
     }
 
@@ -815,15 +1018,6 @@ public class OidcServerBuilder {
             super(OidcServerBuilder.this);
             super.address = "/idp";
             viewProvider = defaultViewProvider();
-        }
-
-        private Object defaultViewProvider() {
-            SpringViewResolverProvider viewProvider = new SpringViewResolverProvider(OidcServerBuilder.this.viewResolver, localeResolver);
-            viewProvider.setUseClassNames(true);
-            viewProvider.setBeanName("model");
-            viewProvider.setResourcePaths(Collections.singletonMap("/remove", "registeredClients"));
-            viewProvider.setClassResources(Collections.singletonMap("org.apache.cxf.fediz.service.oidc.clients.InvalidRegistration", "invalidRegistration"));
-            return viewProvider;
         }
 
         public IdpEndpointBuilder viewResolver(Object viewResolver) {

@@ -1,15 +1,16 @@
 package org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.cxf.Bus;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
-import org.apache.cxf.rs.security.oauth2.provider.ClientRegistrationProvider;
-import org.apache.cxf.rs.security.oauth2.provider.OAuthDataProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.ExpressionUrlAuthorizationConfigurer;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
@@ -19,68 +20,32 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  * @author agonzalez
  */
 public class OidcServer {
-    private OAuthDataProvider authDataProvider;
-    private JAXRSServerFactoryBean discoveryEndpoint;
-    private JAXRSServerFactoryBean jwkEndpoint;
-    private JAXRSServerFactoryBean userInfoEndpoint;
+
+    private static final String USER_CONSOLE_ENDPOINT = "user.console";
+    private static final String IDP_ENDPOINT = "idp.console";
+    private static final String DISCOVERY_ENDPOINT = "discovery";
+    private static final String JWK_ENDPOINT = "jwk";
+    private static final String USER_INFO_ENDPOINT = "user.info";
+    private static final String OAUTH2_ENDPOINT = "oauth2";
+    private static final String REGISTRATIOB_ENDPOINT = "registration";
+    private static final List<String> UI_ENDPOINTS = Arrays.asList(IDP_ENDPOINT, USER_CONSOLE_ENDPOINT);
+    private Map<String, JAXRSServerFactoryBean> endpoints = new HashMap<>();
     private Bus bus;
-    private JAXRSServerFactoryBean oauth2Endpoint;
-    private JAXRSServerFactoryBean idpEndpoint;
     private String basePath;
-    private ClientRegistrationProvider clientRegistrationProvider;
-
-    public void setBasePath(String basePath) {
-        this.basePath = basePath != null ? basePath : "";
-        //        if (!this.basePath.isEmpty() && !this.basePath.endsWith("/")) {
-//            this.basePath += "/";
-//        }
-    }
-
-    public void setBus(Bus bus) {
-        this.bus = bus;
-    }
-
-    public void setAuthDataProvider(OAuthDataProvider authDataProvider) {
-        this.authDataProvider = authDataProvider;
-    }
-
-    public void setDiscoveryEndpoint(JAXRSServerFactoryBean discoveryEndpoint) {
-        this.discoveryEndpoint = discoveryEndpoint;
-    }
-
-    public void setJwkEndpoint(JAXRSServerFactoryBean jwkEndpoint) {
-        this.jwkEndpoint = jwkEndpoint;
-    }
-
-    public void setUserInfoEndpoint(JAXRSServerFactoryBean userInfoEndpoint) {
-        this.userInfoEndpoint = userInfoEndpoint;
-    }
-
-    public void setOAuth2Endpoint(JAXRSServerFactoryBean oauth2Endpoint) {
-        this.oauth2Endpoint = oauth2Endpoint;
-    }
 
     public void start() {
-        Optional.ofNullable(discoveryEndpoint).ifPresent(it -> it.init());
-        Optional.ofNullable(jwkEndpoint).ifPresent(it -> it.init());
-        Optional.ofNullable(userInfoEndpoint).ifPresent(it -> it.init());
-        Optional.ofNullable(oauth2Endpoint).ifPresent(it -> it.init());
-        Optional.ofNullable(idpEndpoint).ifPresent(it -> it.init());
-    }
-
-    public void stop() {
-    }
-
-    public void setIdpEndpoint(JAXRSServerFactoryBean idpEndpoint) {
-        this.idpEndpoint = idpEndpoint;
+        endpoints.values().stream().forEach(it -> it.init());
     }
 
     public void configure(HttpSecurity http) throws Exception {
-        authorize(discoveryEndpoint, http, (it) -> it.permitAll());
-        authorize(idpEndpoint, http, (it) -> it.authenticated());
-        authorize(jwkEndpoint, http, (it) -> it.permitAll());
-        authorize(oauth2Endpoint, http, (it) -> it.permitAll());
-        authorize(userInfoEndpoint, http, (it) -> it.permitAll());
+        List<JAXRSServerFactoryBean> permitAllEndpoints = endpoints.entrySet().stream()
+                .filter(it -> !UI_ENDPOINTS.contains(it.getKey()))
+                .map(it -> it.getValue())
+                .collect(Collectors.toList());
+        for (JAXRSServerFactoryBean endpoint : permitAllEndpoints) {
+            authorize(endpoint, http, (it) -> it.permitAll());
+        }
+        http.authorizeRequests().antMatchers("/static/**").permitAll();
         disableCsrfForSpecificEndpoints(http);
     }
 
@@ -90,10 +55,10 @@ public class OidcServer {
             private List<AntPathRequestMatcher> requestMatchers = new ArrayList<>();
 
             {
-                addEndpoint(discoveryEndpoint);
-                addEndpoint(jwkEndpoint);
-                addEndpoint(oauth2Endpoint);
-                addEndpoint(userInfoEndpoint);
+                List<String> csrfEnabledEndpoints = Arrays.asList(IDP_ENDPOINT, USER_CONSOLE_ENDPOINT);
+                endpoints.entrySet().stream()
+                        .filter(it -> !UI_ENDPOINTS.contains(it.getKey()))
+                        .forEach(it -> addEndpoint(it.getValue()));
             }
 
             private void addEndpoint(JAXRSServerFactoryBean endpoint) {
@@ -122,7 +87,42 @@ public class OidcServer {
         }
     }
 
-    public void setClientRegistrationProvider(ClientRegistrationProvider clientRegistrationProvider) {
-        this.clientRegistrationProvider = clientRegistrationProvider;
+    public void setBus(Bus bus) {
+        this.bus = bus;
+    }
+
+    public void setBasePath(String basePath) {
+        this.basePath = basePath != null ? basePath : "";
+        //        if (!this.basePath.isEmpty() && !this.basePath.endsWith("/")) {
+//            this.basePath += "/";
+//        }
+    }
+
+    public void setIdpEndpoint(JAXRSServerFactoryBean idpEndpoint) {
+        endpoints.put(IDP_ENDPOINT, idpEndpoint);
+    }
+
+    public void setUserConsoleEndpoint(JAXRSServerFactoryBean userConsoleEndpoint) {
+        endpoints.put(USER_CONSOLE_ENDPOINT, userConsoleEndpoint);
+    }
+
+    public void setDynamicClientRegistrationEndpoint(JAXRSServerFactoryBean dynamicClientRegistrationEndpoint) {
+        endpoints.put(REGISTRATIOB_ENDPOINT, dynamicClientRegistrationEndpoint);
+    }
+
+    public void setDiscoveryEndpoint(JAXRSServerFactoryBean discoveryEndpoint) {
+        endpoints.put(DISCOVERY_ENDPOINT, discoveryEndpoint);
+    }
+
+    public void setJwkEndpoint(JAXRSServerFactoryBean jwkEndpoint) {
+        endpoints.put(JWK_ENDPOINT, jwkEndpoint);
+    }
+
+    public void setUserInfoEndpoint(JAXRSServerFactoryBean userInfoEndpoint) {
+        endpoints.put(USER_INFO_ENDPOINT, userInfoEndpoint);
+    }
+
+    public void setOAuth2Endpoint(JAXRSServerFactoryBean oauth2Endpoint) {
+        endpoints.put(OAUTH2_ENDPOINT, oauth2Endpoint);
     }
 }

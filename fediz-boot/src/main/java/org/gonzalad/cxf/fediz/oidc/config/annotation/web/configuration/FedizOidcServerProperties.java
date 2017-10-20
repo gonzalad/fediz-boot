@@ -1,5 +1,7 @@
 package org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration;
 
+import javax.validation.constraints.NotNull;
+
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -11,8 +13,12 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public class FedizOidcServerProperties implements InitializingBean {
 
     public static final long DEFAULT_ACCESS_TOKEN_LIFETIME = 1800;
+
+    @NotNull
     private String issuer;
+
     private String basePath;
+
     private Long accessTokenLifetime;
 
     @NestedConfigurationProperty

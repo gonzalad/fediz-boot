@@ -28,6 +28,7 @@
         <fediz.version>1.4.2</fediz.version>
         <spring-boot.version>1.5.7.RELEASE</spring-boot.version>
         <springloaded.version>1.2.6.RELEASE</springloaded.version>
+        <commons.validator.version>1.6</commons.validator.version>
     </properties>
 
     <repositories>
@@ -120,11 +121,15 @@
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons-lang3.version}</version>
             </dependency>
+            <dependency>
+                <groupId>commons-validator</groupId>
+                <artifactId>commons-validator</artifactId>
+                <version>${commons.validator.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
-
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -139,56 +144,5 @@
             </plugins>
         </pluginManagement>
     </build>
-
-    <!--<build>-->
-    <!--<plugins>-->
-    <!--<plugin>-->
-    <!--<groupId>org.apache.maven.plugins</groupId>-->
-    <!--<artifactId>maven-compiler-plugin</artifactId>-->
-    <!--<version>2.3.2</version>-->
-    <!--<configuration>-->
-    <!--<source>${java.version}</source>-->
-    <!--<target>${java.version}</target>-->
-    <!--</configuration>-->
-    <!--</plugin>-->
-    <!--<plugin>-->
-    <!--<groupId>org.apache.maven.plugins</groupId>-->
-    <!--<artifactId>maven-source-plugin</artifactId>-->
-    <!--<version>2.1.2</version>-->
-    <!--<executions>-->
-    <!--<execution>-->
-    <!--<id>attach-sources</id>-->
-    <!--<phase>package</phase>-->
-    <!--<goals>-->
-    <!--<goal>jar</goal>-->
-    <!--</goals>-->
-    <!--</execution>-->
-    <!--</executions>-->
-    <!--</plugin>-->
-    <!--<plugin>-->
-    <!--<artifactId>maven-javadoc-plugin</artifactId>-->
-    <!--<version>2.9.1</version>-->
-    <!--<configuration>-->
-    <!--<quiet>true</quiet>-->
-    <!--</configuration>-->
-    <!--<executions>-->
-    <!--<execution>-->
-    <!--<id>javadoc</id>-->
-    <!--<phase>package</phase>-->
-    <!--<goals>-->
-    <!--<goal>jar</goal>-->
-    <!--</goals>-->
-    <!--</execution>-->
-    <!--</executions>-->
-    <!--</plugin>-->
-    <!--<plugin>-->
-    <!--<groupId>org.apache.maven.plugins</groupId>-->
-    <!--<artifactId>maven-surefire-plugin</artifactId>-->
-    <!--</plugin>-->
-    <!--</plugins>-->
-    <!--<pluginManagement>-->
-
-    <!--</pluginManagement>-->
-    <!--</build>-->
 
 </project>

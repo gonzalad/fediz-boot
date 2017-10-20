@@ -52,6 +52,7 @@ public class WebSecurityConfig extends AuthorizationServerConfigurerAdapter {
         client.setClientId("dsxzJG8rMLJF3A");
         client.setClientSecret("4Kr1wBK3pzN-SBoqOi0dpA");
         client.setRedirectUris(Arrays.asList("http://localhost:9999/login"));
+        client.getProperties().put("post_logout_redirect_uris", "http://localhost:9999/");
         client.setConfidential(true);
         return Arrays.asList(client);
     }
