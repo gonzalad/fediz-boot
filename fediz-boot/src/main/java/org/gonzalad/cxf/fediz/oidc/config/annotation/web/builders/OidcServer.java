@@ -3,6 +3,7 @@ package org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -52,6 +53,9 @@ public class OidcServer {
     private void disableCsrfForSpecificEndpoints(HttpSecurity http) throws Exception {
         RequestMatcher csrfRequestMatcher = new RequestMatcher() {
 
+            private final HashSet<String> allowedMethods = new HashSet<String>(
+                    Arrays.asList("GET", "HEAD", "TRACE", "OPTIONS"));
+
             private List<AntPathRequestMatcher> requestMatchers = new ArrayList<>();
 
             {
@@ -63,7 +67,7 @@ public class OidcServer {
 
             private void addEndpoint(JAXRSServerFactoryBean endpoint) {
                 if (endpoint != null && endpoint.getAddress() != null) {
-                    requestMatchers.add(new AntPathRequestMatcher(basePath + endpoint.getAddress()));
+                    requestMatchers.add(new AntPathRequestMatcher(basePath + endpoint.getAddress() + "/**"));
                 }
             }
 
@@ -74,10 +78,13 @@ public class OidcServer {
                         return false;
                     }
                 }
-                return true;
+                if (allowedMethods.contains(request.getMethod())) {
+                    return false;
+                }
+               return true;
             }
         };
-        http.csrf().disable();//requireCsrfProtectionMatcher(csrfRequestMatcher);
+        http.csrf().requireCsrfProtectionMatcher(csrfRequestMatcher);
     }
 
     private void authorize(JAXRSServerFactoryBean endpoint, HttpSecurity http,
