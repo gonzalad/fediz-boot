@@ -6,7 +6,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta http-equiv="x-ua-compatible" content="ie=edge"/>
-    <title>Fediz OIDC Authorization Server</title>
+    <title th:text="#{fediz.title.label}">Title</title>
     <meta name="description" content=""/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css" />
@@ -18,22 +18,22 @@
 <body onload="document.form.username.focus();">
     <div class="container">
         <form name="form" th:action="@{/login}" method="post" class="form-signin">
-            <h2 class="form-signin-heading">Please sign in</h2>
+            <h2 class="form-signin-heading" th:text="#{login.title.label}">Please sign in</h2>
             <div th:if="${param.logout}">
-                <p class="text-info"><strong>You have been logged out.</strong></p>
+                <p class="text-info"><strong th:text="#{login.logout.label}">You have been logged out.</strong></p>
             </div>
             <div th:if="${param.error}">
-                <p class="text-danger"><strong>Invalid username and password.</strong></p>
+                <p class="text-danger"><strong th:text="#{login.error.label}">Invalid username and password.</strong></p>
             </div>
             <div class="form-group">
-                <label for="username" class="sr-only"> User Name :</label>
-                <input type="text" id="username" name="username" class="form-control" placeholder="Username" required="true" autofocus="true"/>
+                <label for="username" class="sr-only" th:text="#{login.username.label}">User Name :</label>
+                <input type="text" id="username" name="username" class="form-control" th:placeholder="#{login.username.placeholder}" required="true" autofocus="true"/>
             </div>
             <div class="form-group">
-                <label for="password" class="sr-only">Password :</label>
-                <input type="password" id="password" name="password" class="form-control" placeholder="Password" required="true"/>
+                <label for="password" class="sr-only" th:text="#{login.password.label}">Password :</label>
+                <input type="password" id="password" name="password" class="form-control" th:placeholder="#{login.password.placeholder}" required="true"/>
             </div>
-            <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+            <button class="btn btn-lg btn-primary btn-block" th:text="#{login.button}" type="submit">Sign in</button>
         </form>
     </div>
     <script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>

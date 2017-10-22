@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title th:text="#{consent.title.label}">Title</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/static/css/signin.css" />
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="container">
+    <h1 th:text="#{consent.title.label}">Consent screen</h1>
+    <form name="form" th:action="${model.replyTo}" th:object="${model}" method="post">
+        <input type="hidden" th:field="*{replyTo}"/>
+        <input type="hidden" id="client_id" name="client_id" th:value="*{clientId}"/>
+        <input th:if="*{state}" type="hidden" th:field="*{state}"/>
+        <input th:if="*{clientCodeChallenge}" type="hidden"
+               id="code_challenge" name="code_challenge" th:value="*{clientCodeChallenge}"/>
+        <input th:if="*{nonce}" type="hidden" th:field="*{nonce}"/>
+        <input type="hidden" id="scope" name="scope" th:value="*{proposedScope}"/>
+        <input type="hidden" id="response_type" name="response_type" th:value="*{responseType}"/>
+        <input type="hidden" id="redirect_uri" name="redirect_uri" th:value="*{redirectUri}"/>
+        <input type="hidden"
+               th:id="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).SESSION_AUTHENTICITY_TOKEN}"
+               th:name="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).SESSION_AUTHENTICITY_TOKEN}"
+               th:value="*{authenticityToken}"/>
+        <img th:if="*{applicationLogoUri}" th:src="*{applicationLogoUri}" alt="Application Logo"
+             width="100" height="100"/>
+
+        <h2 th:text="#{consent.ask.grant.label(*{applicationName})}">Would you like to grant xxx the following permissions:</h2>
+
+        <th:block th:each="perm : *{allPermissions}">
+            <div th:class="${perm.default or model.alreadyAuthorizedPermissionsAsStrings.contains(perm.permission) ? 'checkbox disabled' : 'checkbox'}">
+                <label>
+                    <input type="checkbox"
+                           th:disabled="${perm.default or model.alreadyAuthorizedPermissionsAsStrings.contains(perm.permission)}"
+                           checked="checked"
+                           th:name="${perm.permission + '_status'}"
+                           th:id="${perm.permission + '_status'}"
+                           value="allow"/>
+                    <span th:text="${perm.description}"/>
+                </label>
+                <input th:if="${perm.default}"
+                       type="hidden"
+                       th:name="${perm.permission}_status"
+                       value="allow" />
+            </div>
+        </th:block>
+
+        <button th:name="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).AUTHORIZATION_DECISION_KEY}"
+                type="submit"
+                class="btn btn-primary"
+                th:value="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).AUTHORIZATION_DECISION_ALLOW}"
+                th:text="#{consent.accept.button}">
+            OK
+        </button>
+        <button th:name="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).AUTHORIZATION_DECISION_KEY}"
+                type="submit"
+                class="btn btn-default"
+                th:value="${T(org.apache.cxf.rs.security.oauth2.utils.OAuthConstants).AUTHORIZATION_DECISION_DENY}"
+                th:text="#{consent.deny.button}">
+            No,thanks
+        </button>
+    </form>
+</div>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>

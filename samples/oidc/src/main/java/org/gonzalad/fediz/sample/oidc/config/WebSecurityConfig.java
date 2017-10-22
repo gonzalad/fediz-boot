@@ -37,11 +37,11 @@ public class WebSecurityConfig extends AuthorizationServerConfigurerAdapter {
     @Override
     public void configure(OidcServerBuilder authorizationServer) throws Exception {
         authorizationServer
-                .clientRegistration().clients(clients())
-                .and()
-                .idp()
-                .authorizationService()
-                .scopesRequiringNoConsent("openid", "refreshToken");
+                .clientRegistration().clients(clients());
+//                .and()
+//                .idp()
+//                .authorizationService()
+//                .scopesRequiringNoConsent("openid", "refreshToken");
     }
 
     private List<Client> clients() {
