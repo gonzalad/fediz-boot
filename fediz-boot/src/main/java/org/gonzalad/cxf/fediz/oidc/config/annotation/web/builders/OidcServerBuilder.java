@@ -31,7 +31,6 @@ import org.apache.cxf.fediz.service.oidc.logout.TokenCleanupHandler;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
-import org.apache.cxf.jaxrs.utils.ResourceUtils;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
 import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
 import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
@@ -59,7 +58,6 @@ import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
 import org.gonzalad.cxf.fediz.jaxrs.provider.SpringViewResolverProvider;
 import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
 import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.Signature;
-import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.ViewResolver;
 
