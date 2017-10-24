@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.servlet.RequestDispatcher;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 import javax.ws.rs.Produces;
@@ -78,6 +79,8 @@ public class SpringViewResolverProvider extends AbstractConfigurableProvider
     private MessageContext mc;
 
     private LocaleResolver localeResolver;
+
+    private String errorView = "/error";
 
     public SpringViewResolverProvider(ViewResolver viewResolver, LocaleResolver localeResolver) {
         this.viewResolver = viewResolver;
@@ -180,10 +183,34 @@ public class SpringViewResolverProvider extends AbstractConfigurableProvider
             logRedirection(view, attributeName, o);
             view.render(model, mc.getHttpServletRequest(), mc.getHttpServletResponse());
         } catch (Throwable ex) {
-            mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
-            LOG.warning(ExceptionUtils.getStackTrace(ex));
-            throw ExceptionUtils.toInternalServerErrorException(ex, null);
+            handleViewRenderingException(ex);
         }
+    }
+
+    /**
+     * TODO : remove this error handling code (uncomment the original one)
+     * <p>
+     * The pb is Thymeleaf uses response.getWriter() when rendering and if there's
+     * and error during rendering (i.e. non XML view file), then error
+     * is handled by CXF which uses getOutputStream() -> generates a new error
+     * both methods cannot be used during the same request.
+     *
+     * @param exception
+     */
+    private void handleViewRenderingException(Throwable exception) {
+        LOG.warning(ExceptionUtils.getStackTrace(exception));
+        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
+        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_MESSAGE, exception.getMessage());
+        try {
+            mc.getServletContext().getRequestDispatcher(errorView).forward(mc.getHttpServletRequest(), mc.getHttpServletResponse());
+        } catch (Exception e) {
+            LOG.log(Level.SEVERE, String.format("Error forwarding to %s: %s", errorView, e.toString()), e);
+        }
+        // original code (uncomment when the fix is done)
+        //            mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
+        //        LOG.warning(ExceptionUtils.getStackTrace(ex));
+        //            throw ExceptionUtils.toInternalServerErrorException(ex, null);
     }
 
     private void logRedirection(View view, String attributeName, Object o) {
@@ -353,6 +380,10 @@ public class SpringViewResolverProvider extends AbstractConfigurableProvider
 
     public void setResourceExtension(String resourceExtension) {
         this.resourceExtension = resourceExtension;
+    }
+
+    public void setErrorView(String errorView) {
+        this.errorView = errorView;
     }
 
     protected static class HttpServletRequestFilter extends HttpServletRequestWrapper {
