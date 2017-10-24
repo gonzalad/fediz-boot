@@ -36,6 +36,8 @@ I'm listing them here (just not to forget) :
 
 == TODO list
 
+=== General items
+
 [cols="2,5a,2", options="header"]
 |===
 | Name
@@ -149,6 +151,32 @@ I'm listing them here (just not to forget) :
  * optionally display Powered by Fediz logo.
  * etc... (basically we must take advantage of all Client info registered -
    see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)
+|
+
+|===
+
+
+=== Little glitches
+
+[cols="2,5a,2", options="header"]
+|===
+| Module
+| Description
+| Status
+
+| OIDC
+| Hard coded /services in UI
+|
+
+| OIDC
+| Review OidcServer/OidcServerBuilder - some init actions must be done during server.init/start
+  i.e. console.init. For the moment, those actions are called on builder.build() call (too early).
+|
+
+| General
+| SpringViewResolverProvider: thymeleaf calls getWriter, while cxf error handling calls getOutputStream.
+  To reproduce the issue, comment the current error handling in SpringViewResolverProvider, and
+  render an invalid thymeleaf template (ie non XML)
 |
 
 |===
