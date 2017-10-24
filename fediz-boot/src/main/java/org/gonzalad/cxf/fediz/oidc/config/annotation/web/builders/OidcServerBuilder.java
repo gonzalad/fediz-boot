@@ -31,6 +31,7 @@ import org.apache.cxf.fediz.service.oidc.logout.TokenCleanupHandler;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
+import org.apache.cxf.jaxrs.utils.ResourceUtils;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
 import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
 import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
@@ -57,6 +58,7 @@ import org.apache.cxf.rs.security.oidc.idp.OidcKeysService;
 import org.apache.cxf.rs.security.oidc.idp.UserInfoService;
 import org.gonzalad.cxf.fediz.jaxrs.provider.SpringViewResolverProvider;
 import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.FedizOidcServerProperties;
+import org.gonzalad.cxf.fediz.oidc.config.annotation.web.configuration.Signature;
 import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.ViewResolver;
@@ -396,7 +398,7 @@ public class OidcServerBuilder {
     }
 
     /**
-     * Hack code to transform Spring Ssl information to information usable
+     * Transform Signature configuration to information usable
      * by JwsUtils and KeyManagementUtils.
      * <p>
      * if existingProperties already contain a rs.security.signature, we don't do nothing
@@ -413,21 +415,15 @@ public class OidcServerBuilder {
             return existingProperties;
         }
         Map<String, Object> newMap = new HashMap<>(existingProperties != null ? existingProperties : Collections.emptyMap());
-        Ssl ssl = serverProperties.getJwk().getLocalStore();
-        // TODO: we must handle relative keyStoreFile locations.
-        // I made a single test with absolute file, which is ugly :
-        // fediz.oidc.ssl.key-store: /home/agonzalez/git-projects/fediz-boot/fediz-boot/src/main/resources/samples/oidc.jks
-        //
-        // and we should also check if Spring SSL handles classpath: or any other springies goodies and be able
-        // to have the same behaviour (in this case using here a resourceLoader is need be).
-        //
-        // and finally, Fediz appears to be able to use a keyClient (what is it ? appears interesting... could we support
+        Signature sig = serverProperties.getSignature();
+        // TODO: 
+        // Fediz appears to be able to use a keyClient (what is it ? appears interesting... could we support
         // that easily ?)
-        Optional.ofNullable(ssl.getKeyStore()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_FILE, ssl.getKeyStore()));
-        Optional.ofNullable(ssl.getKeyStoreType()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_TYPE, ssl.getKeyStoreType()));
-        Optional.ofNullable(ssl.getKeyStorePassword()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_PSWD, ssl.getKeyStorePassword()));
-        Optional.ofNullable(ssl.getKeyAlias()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_ALIAS, ssl.getKeyAlias()));
-        Optional.ofNullable(ssl.getKeyPassword()).ifPresent(it -> newMap.put(RSSEC_KEY_PSWD, ssl.getKeyPassword()));
+        Optional.ofNullable(sig.getKeyStore()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_FILE, sig.getKeyStore()));
+        Optional.ofNullable(sig.getKeyStoreType()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_TYPE, sig.getKeyStoreType()));
+        Optional.ofNullable(sig.getKeyStorePassword()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_PSWD, sig.getKeyStorePassword()));
+        Optional.ofNullable(sig.getKeyAlias()).ifPresent(it -> newMap.put(RSSEC_KEY_STORE_ALIAS, sig.getKeyAlias()));
+        Optional.ofNullable(sig.getKeyPassword()).ifPresent(it -> newMap.put(RSSEC_KEY_PSWD, sig.getKeyPassword()));
         newMap.put(RSSEC_SIGNATURE_INCLUDE_KEY_ID, "true");
         newMap.put(RSSEC_SIGNATURE_KEY_PSWD_PROVIDER, buildPrivateKeyPasswordProvider());
         return newMap;

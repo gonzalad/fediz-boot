@@ -9,6 +9,7 @@ import org.gonzalad.cxf.fediz.oidc.config.annotation.web.builders.OidcServerBuil
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
+import org.springframework.boot.context.embedded.Ssl;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -82,16 +83,24 @@ public class AuthorizationServerConfiguration extends WebSecurityConfigurerAdapt
     public void configure(HttpSecurity http) throws Exception {
         //super.configure(http);
         oidcServerProperties.setAccessTokenLifetime(serverProperties.getSession().getTimeout() != null ? serverProperties.getSession().getTimeout() : FedizOidcServerProperties.DEFAULT_ACCESS_TOKEN_LIFETIME);
-        if (oidcServerProperties.getJwk().getLocalStore() == null) {
+        if (oidcServerProperties.getSignature() == null) {
             // if missing, we take general ssl configuration from Spring
-            oidcServerProperties.getJwk().setLocalStore(serverProperties.getSsl());
-            if (oidcServerProperties.getJwk().getLocalStore() == null) {
-                throw new IllegalStateException("Configuration property fediz.oidc.jwk.local-store or server.ssl missing");
+        	Ssl ssl = serverProperties.getSsl();
+        	if (ssl == null) {
+                throw new IllegalStateException("Configuration property fediz.oidc.signature or server.ssl missing");
             }
+        	Signature sig = new Signature();
+        	sig.setKeyStore(ssl.getKeyStore());
+        	sig.setKeyStore(ssl.getKeyStoreType());
+        	sig.setKeyStorePassword(ssl.getKeyStorePassword());
+        	sig.setKeyAlias(ssl.getKeyAlias());
+        	sig.setKeyPassword(ssl.getKeyPassword());
+            oidcServerProperties.setSignature(sig);
+            
         }
         if (oidcServerProperties.getBasePath() == null) {
             String basePath = cxfBasePath != null ? cxfBasePath.replaceFirst("/\\*?$", "") : cxfBasePath;
-            oidcServerProperties.setBasePath(cxfBasePath);
+            oidcServerProperties.setBasePath(basePath);
         }
         authorizationServerBuilder = new OidcServerBuilder(oidcServerProperties, bus, viewResolver, getLocaleResolver());
         for (AuthorizationServerConfigurer configurer : configurers) {

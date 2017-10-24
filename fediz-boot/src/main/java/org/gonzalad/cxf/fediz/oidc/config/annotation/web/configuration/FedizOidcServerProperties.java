@@ -22,7 +22,7 @@ public class FedizOidcServerProperties implements InitializingBean {
     private Long accessTokenLifetime;
 
     @NestedConfigurationProperty
-    private Jwk jwk = new Jwk();
+    private Signature signature = new Signature();
 
     public String getIssuer() {
         return issuer;
@@ -48,12 +48,12 @@ public class FedizOidcServerProperties implements InitializingBean {
         this.accessTokenLifetime = accessTokenLifetime;
     }
 
-    public Jwk getJwk() {
-        return jwk;
+    public Signature getSignature() {
+        return signature;
     }
 
-    public void setJwk(Jwk jwk) {
-        this.jwk = jwk;
+    public void setSignature(Signature signature) {
+        this.signature = signature;
     }
 
     @Override
