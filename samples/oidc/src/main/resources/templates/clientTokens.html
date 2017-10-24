@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title th:text="#{clientTokens.title.label}">Title</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/static/css/signin.css" />
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="container">
+    <h1 th:text="#{clientTokens.description.label(${model.client.applicationName}, ${model.client.clientId})}">Title</h1>
+    <h2 th:text="#{clientTokens.accessTokens.title.label}">Access Tokens</h2>
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th th:text="#{token.id.label}">id</th>
+            <th th:text="#{token.issueDate.label}">issueDate</th>
+            <th th:text="#{token.expiryDate.label}">expiryDate</th>
+            <th th:text="#{token.refreshToken.label}">refreshToken</th>
+            <th th:if="${not #lists.isEmpty(model.refreshTokens)}" th="#{token.action.label}">action</th>
+        </tr>
+        </thead>
+        <tbody th:each="token : ${model.accessTokens}">
+        <tr>
+            <td th:text="${token.key}">id</td>
+            <td th:text="${#dates.format(new java.util.Date(token.issuedAt * 1000), #messages.msg('date.format'))}">issuedAt</td>
+            <td th:if="#{token.expiresIn &gt; 0}"
+                    th:text="${#dates.format(new java.util.Date((token.issuedAt + token.expiresIn) * 1000), #messages.msg('date.format'))}">Expiry</td>
+            <td th:if="${token.expiresIn &lt;= 0}"
+                th:text="#{clientTokens.issuedDate.never.label}">Never</td>
+            <td th:if="${!tokens.refreshTokens.isEmpty()}"
+                th:text="#{tokens.refreshToken}">refresh token</td>
+            <td>
+                <form name="formRevokeAccessToken"
+                      th:action="@{/services/console/clients/} + ${model.client.clientId + '/at/' + token.tokenKey + '/revoke'}"
+                      method="post">
+                    <input type="hidden"
+                           th:value="${T(org.apache.cxf.fediz.service.oidc.CSRFUtils).getCSRFToken(#httpServletRequest, true)}"
+                           name="client_csrfToken" />
+                    <input type="submit" value="#{common.delete.button}"/>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <h2 th:text="#{clientTokens.refreshTokens.title.label}">Refresh Tokens</h2>
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th th:text="#{token.id.label}">id</th>
+            <th th:text="#{token.issueDate.label}">issueDate</th>
+            <th th:text="#{token.expiryDate.label}">expiryDate</th>
+            <th th:text="#{token.accessToken.label}">accessToken</th>
+            <th th:if="${not #lists.isEmpty(model.refreshTokens)}" th:text="#{token.action.label}">action</th>
+        </tr>
+        </thead>
+        <tbody th:each="token : ${model.refreshTokens}">
+        <tr>
+            <td th:text="${token.key}">id</td>
+            <td th:text="${#dates.format(new java.util.Date(token.issuedAt * 1000), #messages.msg('date.format'))}">issuedAt</td>
+            <td th:if="#{token.expiresIn > 0}"
+                th:text="${#dates.format(new java.util.Date((token.issuedAt + token.expiresIn) * 1000), #messages.msg('date.format'))}">Expiry</td>
+            <td th:if="#{token.expiresIn &lt;= 0}"
+                th:text="#{clientTokens.issuedDate.never.label}">Never</td>
+            <td>
+                <ul class="list-group" th:each="accessToken : ${token.accessTokens}">
+                    <p class="list-group-item" th:text="${accessToken}">accessTokenKey</p>
+                </ul>
+            </td>
+            <td>
+                <form name="formRevokeRefreshToken"
+                      th:action="@{/services/console/clients/} + ${model.client.clientId + '/at/' + token.tokenKey + '/revoke'}"
+                      method="post">
+                    <input type="hidden"
+                           th:value="${T(org.apache.cxf.fediz.service.oidc.CSRFUtils).getCSRFToken(#httpServletRequest, true)}"
+                           name="client_csrfToken" />
+                    <input type="submit" value="#{common.delete.button}"/>
+                </form>
+                <a id="cancel_button"
+                   name="cancel_button"
+                   class="btn btn-default pull-right"
+                   th:href="@{/services/console/clients}"
+                   th:text="#{common.cancel.button}">Cancel</a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p><a th:href="@{/services/console/clients/} + ${model.client.clientId}"
+          th:text="#{common.return.link}">Return</a></p>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>

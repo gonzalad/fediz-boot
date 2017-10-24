@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title th:text="#{invalidRegistration.title.label}">Title</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="/static/css/signin.css"/>
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="container">
+    <h1 th:text="#{invalidRegistration.title.label}">Title</h1>
+    <div>
+    <p class="bg-danger" th:text="${model.message}">Error message</p>
+    </div>
+    <div>
+        <p><th:block th:text="#{invalidRegistration.return.link}"/>
+            <a th:href="@{/services/console/clients/register}"
+               th:text="#{invalidRegistration.returnToClientRegistration.link}">Client registration</a>
+        </p>
+        <p><th:block th:text="#{invalidRegistration.return.link}"/>
+            <a th:href="@{/services/console/clients}"
+               th:text="#{invalidRegistration.returnToRegisteredClients.link}">registered Clients</a>
+        </p>
+    </div>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>

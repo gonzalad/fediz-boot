@@ -286,6 +286,9 @@ public class OidcServerBuilder {
             if (!userConsoleEndpointBuilder.customClientRegistrationService) {
                 userConsoleService.getClientRegService().setHomeRealms(clientRegistrationProviderBuilder.homeRealms.stream().collect(Collectors.toMap(it -> it, it -> it)));
             }
+            // TODO: remove this HACK for calling some postConstructs
+            // should be done in OidcServer.start (or a OidcServer.initialize())
+            userConsoleService.getClientRegService().init();
         }
         return userConsoleService;
     }

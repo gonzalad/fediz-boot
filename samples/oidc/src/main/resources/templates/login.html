@@ -2,40 +2,65 @@
 <html class="no-js" lang=""
       xmlns="http://www.w3.org/1999/xhtml"
       xmlns:th="http://www.thymeleaf.org"
-      xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity3">
+>
 <head>
     <meta charset="utf-8"/>
     <meta http-equiv="x-ua-compatible" content="ie=edge"/>
     <title th:text="#{fediz.title.label}">Title</title>
     <meta name="description" content=""/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="/static/css/signin.css" />
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="/static/css/signin.css"/>
     <link rel="manifest" href="site.webmanifest"/>
     <link rel="apple-touch-icon" href="icon.png"/>
 </head>
 
 <body onload="document.form.username.focus();">
-    <div class="container">
-        <form name="form" th:action="@{/login}" method="post" class="form-signin">
-            <h2 class="form-signin-heading" th:text="#{login.title.label}">Please sign in</h2>
+<div class=" vertical-center">
+    <div class="jumbotron container"
+         style="padding: 1px 60px 48px 30px; max-width: 330px; margin:  auto; box-shadow: 0 2px 2px 0 rgba(0,0,0,0.14), 0 3px 1px -2px rgba(0,0,0,0.12), 0 1px 5px 0 rgba(0,0,0,0.2);">
+        <h2 th:text="#{login.title.label}">Title</h2>
+        <form name="form" th:action="@{/login}" method="post" style="padding: 20px 0 0 30px">
             <div th:if="${param.logout}">
                 <p class="text-info"><strong th:text="#{login.logout.label}">You have been logged out.</strong></p>
             </div>
             <div th:if="${param.error}">
-                <p class="text-danger"><strong th:text="#{login.error.label}">Invalid username and password.</strong></p>
+                <p class="text-danger"><strong th:text="#{login.error.label}">Invalid username and password.</strong>
+                </p>
             </div>
             <div class="form-group">
                 <label for="username" class="sr-only" th:text="#{login.username.label}">User Name :</label>
-                <input type="text" id="username" name="username" class="form-control" th:placeholder="#{login.username.placeholder}" required="true" autofocus="true"/>
+                <input type="text" id="username" name="username" class="form-control"
+                       th:placeholder="#{login.username.placeholder}" required="true" autofocus="true"/>
             </div>
             <div class="form-group">
                 <label for="password" class="sr-only" th:text="#{login.password.label}">Password :</label>
-                <input type="password" id="password" name="password" class="form-control" th:placeholder="#{login.password.placeholder}" required="true"/>
+                <input type="password" id="password" name="password" class="form-control"
+                       th:placeholder="#{login.password.placeholder}" required="true"/>
             </div>
             <button class="btn btn-lg btn-primary btn-block" th:text="#{login.button}" type="submit">Sign in</button>
         </form>
     </div>
-    <script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+    <!--<form name="form" th:action="@{/login}" method="post" class="form-signin">-->
+    <!--<h2 class="form-signin-heading" th:text="#{login.title.label}">Please sign in</h2>-->
+    <!--<div th:if="${param.logout}">-->
+    <!--<p class="text-info"><strong th:text="#{login.logout.label}">You have been logged out.</strong></p>-->
+    <!--</div>-->
+    <!--<div th:if="${param.error}">-->
+    <!--<p class="text-danger"><strong th:text="#{login.error.label}">Invalid username and password.</strong></p>-->
+    <!--</div>-->
+    <!--<div class="form-group">-->
+    <!--<label for="username" class="sr-only" th:text="#{login.username.label}">User Name :</label>-->
+    <!--<input type="text" id="username" name="username" class="form-control" th:placeholder="#{login.username.placeholder}" required="true" autofocus="true"/>-->
+    <!--</div>-->
+    <!--<div class="form-group">-->
+    <!--<label for="password" class="sr-only" th:text="#{login.password.label}">Password :</label>-->
+    <!--<input type="password" id="password" name="password" class="form-control" th:placeholder="#{login.password.placeholder}" required="true"/>-->
+    <!--</div>-->
+    <!--<button class="btn btn-lg btn-primary btn-block" th:text="#{login.button}" type="submit">Sign in</button>-->
+    <!--</form>-->
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
 </body>
 </html>

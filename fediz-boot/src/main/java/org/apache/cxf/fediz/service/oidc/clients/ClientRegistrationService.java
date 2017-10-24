@@ -486,7 +486,7 @@ public class ClientRegistrationService {
     }
 
     public void init() {
-        for (Client c : clientProvider.getClients(null)) {
+         for (Client c : clientProvider.getClients(null)) {
             if (c.getResourceOwnerSubject() != null) {
                 String userName = c.getResourceOwnerSubject().getLogin();
                 getClientRegistrations(userName).add(c);

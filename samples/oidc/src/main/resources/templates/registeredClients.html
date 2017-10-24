@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title th:text="#{registeredClients.title.label}">Title</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/static/css/signin.css" />
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="container">
+    <h1 th:text="#{registeredClients.title.label}">Title</h1>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Creation Date</th>
+                <th>Redirect URI</th>
+            </tr>
+        </thead>
+        <tbody th:each="client : ${model.clients}">
+            <tr>
+                <td><a th:href="@{/services/console/clients/} + ${client.clientId}" th:text="${client.applicationName}">Application</a></td>
+                <td th:text="${client.clientId}">ClientId</td>
+                <td th:text="${#dates.format(new java.util.Date(client.registeredAt * 1000), #messages.msg('date.format'))}">Created</td>
+                <td th:text="#{userConsole.clientRegistration.link}">Redirect URI</td>
+            </tr>
+        </tbody>
+    </table>
+    <p><a th:href="@{/services/console/clients/register}" th:text="#{registeredClients.newClient.link}">Register a new client</a></p>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>

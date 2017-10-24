@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html class="no-js" lang=""
+      xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="x-ua-compatible" content="ie=edge"/>
+    <title th:text="#{client.title.label}">Title</title>
+    <meta name="description" content=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="/static/css/signin.css"/>
+    <link rel="manifest" href="site.webmanifest"/>
+    <link rel="apple-touch-icon" href="icon.png"/>
+</head>
+
+<body>
+<div class="container">
+    <h1 th:text="${model.applicationName}">Title</h1>
+    <form name="formClient"
+          th:action="@{/services/console/clients/} + ${model.clientId}"
+          method="post"
+          class="form-horizontal">
+        <input type="hidden"
+               th:value="${T(org.apache.cxf.fediz.service.oidc.CSRFUtils).getCSRFToken(#httpServletRequest, true)}"
+               name="client_csrfToken"/>
+        <div class="row">
+            <div class="col-sm-6">
+                <div class="row">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.id.label}">ID</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static" th:text="${model.clientId}">value</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.type.label}">Type</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static"
+                               th:if="${model.confidential}"
+                               th:text="#{client.type.confidential.label}">value</p>
+                            <p class="form-control-static"
+                               th:if="${!model.confidential}"
+                               th:text="#{client.type.public.label}">value</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.secret.label}">Secret</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static"
+                               th:if="${model.clientSecret}"
+                               th:text="${model.clientSecret}">value</p>
+                            <p class="form-control-static"
+                               th:if="${#strings.isEmpty(model.clientSecret)}"
+                               th:text="#{client.secret.unavailable.label}">value</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.registeredAt.label}">Created</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static"
+                               th:text="${#dates.format(new java.util.Date(model.registeredAt * 1000), #messages.msg('date.format'))}">
+                                value</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.homeRealm.label}">Realm</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static"
+                               th:if="${model.properties.get('homeRealmAlias')}"
+                               th:text="${!#strings.isEmpty(model.properties.get('homeRealmAlias'))}">value</p>
+                            <p class="form-control-static"
+                               th:if="${#strings.isEmpty(model.properties.get('homeRealmAlias'))}"
+                               th:text="#{client.homeRealm.default.label}">Default</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.redirectURL.label}">Redirect URL</label>
+                        <div class="col-sm-10">
+                            <th:block th:if="${not #lists.isEmpty(model.redirectUris)}" th:text="toto"/>
+                            <div class="form-control-static">
+                                <ul class="list-group" th:each="redirectUri : ${model.redirectUris}">
+                                    <li class="list-group-item" th:text="${redirectUri}">value</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.audience.label}">Audience URL</label>
+                        <div class="col-sm-10">
+                            <div class="form-control-static">
+                                <ul class="list-group"
+                                    th:each="registeredAudiences : ${model.registeredAudiences}">
+                                    <li class="list-group-item" th:text="${registeredAudiences}">value</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label" th:text="#{client.logout.label}">Logout URL</label>
+                        <div class="col-sm-10">
+                            <p class="form-control-static"
+                               th:text="${!#strings.isEmpty(model.properties.get('post_logout_redirect_uris')) ? model.properties.get('post_logout_redirect_uris') : ' '}">
+                                value</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="row">
+                    <div class="col-sm-12">
+                        <a th:href="@{/services/console/clients/} + ${model.clientId + '/tokens'}"
+                           class="btn btn-default btn-block">
+                            <span class="glyphicon glyphicon-chevron-right pull-left"
+                                  aria-hidden="true"></span>
+                            <th:block th:text="#{client.issuedTokens.link}"/>
+                        </a>
+                    </div>
+                    <div class="col-sm-12">
+                        <a th:href="@{/services/console/clients/} + ${model.clientId + '/codes'}"
+                           class="btn btn-default btn-block">
+                            <span class="glyphicon glyphicon-chevron-right pull-left"
+                                  aria-hidden="true"></span>
+                            <th:block th:text="#{client.issuedCodes.link}"/>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-12">
+            <div class="btn-group btn-group-justified" role="group">
+                <th:block th:if="#{client.clientSecret}">
+                    <div class="btn-group" role="group">
+                        <button id="resetClient"
+                                name="submit_button"
+                                class="btn btn-primary"
+                                type="submit"
+                                th:text="#{client.resetClientSecret.button}"/>
+                    </div>
+                </th:block>
+                <div class="btn-group" role="group">
+                    <button id="deleteClient"
+                            name="submit_button"
+                            class="btn btn-primary"
+                            type="submit"
+                            th:text="#{client.delete.button}"/>
+                </div>
+                <a id="cancel_button"
+                   name="cancel_button"
+                   class="btn btn-default"
+                   th:href="@{/services/console/clients}"
+                   th:text="#{common.cancel.button}">Cancel</a>
+            </div>
+        </div>
+    </form>
+</div>
+<script language="javascript">
+window.onload=function() {
+  var clientId = "<th:block th:text='${model.clientId}'/>";
+  var buttons = document.getElementsByName("formClient");
+  document.getElementById("deleteClient").onclick=function() {
+      this.form.action = this.form.action + '/remove';
+  }
+  var resetClientButton = document.getElementById("resetClient");
+  if (resetClientButton) {
+      document.getElementById("resetClient").onclick=function() {
+          this.form.action = this.form.action + '/reset';
+      }
+  }
+}
+
+
+
+
+
+
+
+</script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="/static/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+</body>
+</html>
