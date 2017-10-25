@@ -22,7 +22,7 @@
         shouldn't have to specify an explicit version for CXF (it should come
         from fediz)
         -->
-        <cxf.version>3.1.13</cxf.version>
+        <cxf.version>3.1.14-SNAPSHOT</cxf.version>
         <commons-lang3.version>3.5</commons-lang3.version>
         <ehcache.version>2.10.4</ehcache.version>
         <fediz.version>1.4.2</fediz.version>

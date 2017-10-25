@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import javax.servlet.RequestDispatcher;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
@@ -37,12 +38,6 @@ import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.ViewResolver;
 
-/**
- * TODO Glitches:
- * <p>
- * - When error during view processing, tomcat prints an internal error (getWriter already called)
- * to reproduce, just change a valid thymeleaf template to an invalid one.
- */
 @Produces("text/html")
 @Provider
 public class SpringViewResolverProvider extends AbstractConfigurableProvider
@@ -199,18 +194,17 @@ public class SpringViewResolverProvider extends AbstractConfigurableProvider
      */
     private void handleViewRenderingException(Throwable exception) {
         LOG.warning(ExceptionUtils.getStackTrace(exception));
+        
         mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
         mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
         mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_MESSAGE, exception.getMessage());
         try {
             mc.getServletContext().getRequestDispatcher(errorView).forward(mc.getHttpServletRequest(), mc.getHttpServletResponse());
         } catch (Exception e) {
-            LOG.log(Level.SEVERE, String.format("Error forwarding to %s: %s", errorView, e.toString()), e);
+        	LOG.log(Level.SEVERE, String.format("Error forwarding to %s: %s", errorView, e.toString()), e);
+        	mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
+        	throw ExceptionUtils.toInternalServerErrorException(exception, null);
         }
-        // original code (uncomment when the fix is done)
-        //            mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
-        //        LOG.warning(ExceptionUtils.getStackTrace(ex));
-        //            throw ExceptionUtils.toInternalServerErrorException(ex, null);
     }
 
     private void logRedirection(View view, String attributeName, Object o) {
