@@ -193,18 +193,24 @@ public class SpringViewResolverProvider extends AbstractConfigurableProvider
      * @param exception
      */
     private void handleViewRenderingException(Throwable exception) {
+        // original code (uncomment when the fix is done)
+        mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
         LOG.warning(ExceptionUtils.getStackTrace(exception));
-        
-        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
-        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
-        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_MESSAGE, exception.getMessage());
-        try {
-            mc.getServletContext().getRequestDispatcher(errorView).forward(mc.getHttpServletRequest(), mc.getHttpServletResponse());
-        } catch (Exception e) {
-        	LOG.log(Level.SEVERE, String.format("Error forwarding to %s: %s", errorView, e.toString()), e);
-        	mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
-        	throw ExceptionUtils.toInternalServerErrorException(exception, null);
-        }
+        throw ExceptionUtils.toInternalServerErrorException(exception, null);
+
+        // Temporary fix
+//        LOG.warning(ExceptionUtils.getStackTrace(exception));
+//
+//        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_EXCEPTION, exception);
+//        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_STATUS_CODE, 500);
+//        mc.getHttpServletRequest().setAttribute(RequestDispatcher.ERROR_MESSAGE, exception.getMessage());
+//        try {
+//            mc.getServletContext().getRequestDispatcher(errorView).forward(mc.getHttpServletRequest(), mc.getHttpServletResponse());
+//        } catch (Exception e) {
+//        	LOG.log(Level.SEVERE, String.format("Error forwarding to %s: %s", errorView, e.toString()), e);
+//        	mc.put(AbstractHTTPDestination.REQUEST_REDIRECTED, Boolean.FALSE);
+//        	throw ExceptionUtils.toInternalServerErrorException(exception, null);
+//        }
     }
 
     private void logRedirection(View view, String attributeName, Object o) {
