@@ -31,7 +31,7 @@ import org.apache.cxf.fediz.service.oidc.logout.TokenCleanupHandler;
 import org.apache.cxf.jaxrs.JAXRSServerFactoryBean;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.cxf.jaxrs.provider.json.JsonMapObjectProvider;
-import org.apache.cxf.jaxrs.spring.SpringViewResolverProvider;
+import org.apache.cxf.jaxrs.springmvc.SpringViewResolverProvider;
 import org.apache.cxf.rs.security.cors.CrossOriginResourceSharingFilter;
 import org.apache.cxf.rs.security.jose.common.PrivateKeyPasswordProvider;
 import org.apache.cxf.rs.security.jose.jaxrs.JsonWebKeysProvider;
